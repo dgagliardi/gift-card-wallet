@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            max-width: 500px;
+            margin: auto;
+            background: #f4f4f9;
+        }
+
+        h2,
+        h3 {
+            color: #333;
+        }
+
+        .btn {
+            background: #2a5298;
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-warning {
+            background: #e6a800;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            margin-bottom: 16px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        /* Dashboard List Cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border-left: 5px solid #2a5298;
+        }
+
+        .card.archived {
+            border-left: 5px solid #6c757d;
+            opacity: 0.8;
+        }
+
+        .card-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 2px;
+            color: #2a5298;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .balance {
+            color: #28a745;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* History List */
+        .history-item {
+            border-bottom: 1px solid #eee;
+            padding: 10px 5px;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .history-item:active {
+            background: #e9ecef;
+        }
+
+        .history-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .history-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-date {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .history-balance {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .history-amount {
+            font-weight: bold;
+            color: #d9534f;
+        }
+
+        .history-note {
+            font-size: 13px;
+            color: #555;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        .edit-hint {
+            font-size: 18px;
+            color: #2a5298;
+            margin-left: 10px;
+            font-weight: bold;
+            vertical-align: middle;
+        }
+
+        .extra-info {
+            margin-bottom: 15px;
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.85);
+        }
+
+        .custom-alert {
+            background: white;
+            margin: 15% auto;
+            padding: 25px;
+            border-radius: 12px;
+            width: 85%;
+            max-width: 400px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .center-text {
+            text-align: center;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .button-group .btn {
+            margin-top: 0;
+        }
+
+        .title-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .title-header h2 {
+            margin: 0;
+        }
+
+        .link-action {
+            color: #2a5298;
+            font-size: 14px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        /* Universal Splash Screen */
+        .splash-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 85vh;
+            text-align: center;
+        }
+
+        .splash-title {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: -0.5px;
+        }
+
+        .css-generic-card {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            width: 280px;
+            height: 175px;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            margin-bottom: 35px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .css-generic-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0) 60%);
+            pointer-events: none;
+        }
+
+        .css-card-icon {
+            font-size: 48px;
+            color: rgba(255, 255, 255, 0.9);
+            z-index: 1;
+            margin-bottom: 10px;
+        }
+
+        .css-card-text {
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 1;
+            letter-spacing: 2px;
+        }
+
+        .card-content-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chip {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 30px;
+            background: #ffd700;
+            border-radius: 6px;
+            opacity: 0.8;
+        }
+
+        .spinner {
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #2a5298;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .splash-text {
+            color: #666;
+            font-size: 15px;
+            margin: 0;
+        }
+
+        /* Detail View Dynamic Card - UPDATED */
+        .detail-card-visual {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+            margin-bottom: 20px;
+            min-height: 110px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .detail-card-visual::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+
+        .detail-brand-name {
+            font-size: 22px;
+            font-weight: 800;
+            z-index: 1;
+            text-transform: capitalize;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .detail-card-data {
+            z-index: 1;
+            margin-top: 25px;
+        }
+
+        .detail-card-number {
+            font-size: 16px;
+            font-family: monospace;
+            opacity: 0.95;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+            margin-bottom: 5px;
+        }
+
+        .detail-card-pin {
+            font-size: 14px;
+            font-family: monospace;
+            opacity: 0.8;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loading" class="splash-screen">
+        <div class="splash-title">Gift Card Wallet</div>
+        <div class="css-generic-card">
+            <div class="chip"></div>
+            <div class="card-content-wrapper">
+                <div class="css-card-icon">💳</div>
+                <div class="css-card-text">PREPAID</div>
+            </div>
+        </div>
+        <div class="spinner"></div>
+        <p id="loadingText" class="splash-text">Loading your wallet...</p>
+    </div>
+
+    <div id="dashboard" class="hidden">
+        <div class="title-header">
+            <h2 id="dashboardTitle">My Cards</h2>
+            <span class="link-action" id="toggleViewLink" onclick="toggleArchiveView()">Show Archived</span>
+        </div>
+        <div id="cardList"></div>
+        <button class="btn" id="addCardBtn" onclick="showView('addCardView')">+ Add New Card</button>
+    </div>
+
+    <div id="addCardView" class="hidden">
+        <div class="title-header">
+            <h2>Add New Card</h2>
+            <span class="link-action" onclick="showView('dashboard')">Cancel</span>
+        </div>
+
+        <label>Store / Brand Name:</label>
+        <input type="text" id="cardBrand" placeholder="e.g. Home Depot, Starbucks, Costco">
+
+        <label>Card Type:</label>
+        <select id="cardType" onchange="toggleFormFields()">
+            <option value="Physical">Physical</option>
+            <option value="Digital">Digital</option>
+        </select>
+
+        <div id="physicalInputs">
+            <label>Card Number (Optional):</label>
+            <input type="text" id="cardNumber" placeholder="e.g. 123456789">
+            <label>PIN (Optional):</label>
+            <input type="text" id="cardPin" placeholder="e.g. 1234">
+            <label>Check Balance URL (Optional):</label>
+            <input type="url" id="balanceUrl" placeholder="e.g. https://www.homedepot.com/c/Gift_Cards">
+        </div>
+
+        <div id="imageUploadDiv" class="hidden">
+            <label>Upload Digital Barcode Image:</label>
+            <input type="file" id="cardImage" accept="image/*">
+        </div>
+
+        <label>Initial Balance ($):</label>
+        <input type="number" id="initialBalance" step="0.01" placeholder="e.g. 100.00">
+
+        <button class="btn" onclick="saveNewCard()">Save Card</button>
+    </div>
+
+    <div id="cardDetailView" class="hidden">
+        <div class="title-header">
+            <span class="link-action" onclick="showView('dashboard')" style="font-size: 16px; font-weight: bold;">&larr;
+                Back</span>
+            <span class="link-action" onclick="openEditCardModal()">Edit Details</span>
+        </div>
+
+        <div class="detail-card-visual">
+            <div class="detail-brand-name" id="visualBrandName">Brand</div>
+            <div class="detail-card-data">
+                <div class="detail-card-number" id="visualCardNumber"></div>
+                <div class="detail-card-pin" id="visualCardPin"></div>
+            </div>
+        </div>
+
+        <p style="margin-top: 5px;">Available Balance: <span class="balance" id="detailBalance"></span></p>
+
+        <div id="detailExtraInfo" class="extra-info"></div>
+        <div id="detailImageContainer"></div>
+
+        <hr>
+        <h3>Log Purchase</h3>
+        <label>Purchase Amount ($):</label>
+        <input type="number" id="deductAmount" step="0.01" placeholder="e.g. 45.50">
+
+        <label>Note (Optional):</label>
+        <input type="text" id="transactionNote" placeholder="e.g. Gas, Groceries, Supplies">
+
+        <button class="btn" onclick="logTransaction()">Deduct Amount</button>
+
+        <hr>
+        <div class="title-header">
+            <h3>History</h3>
+            <button id="archiveActionBtn" class="btn btn-warning"
+                style="width: auto; padding: 6px 12px; margin: 0; font-size: 14px;"></button>
+        </div>
+
+        <div id="transactionHistory">Loading...</div>
+    </div>
+
+    <div id="verifyAlertModal" class="modal">
+        <div class="custom-alert center-text">
+            <h3 style="color: #28a745; margin-top: 0; font-size: 22px;">✓ Copied!</h3>
+            <p style="color: #555; font-size: 16px; margin-bottom: 5px;">Card number copied to clipboard.</p>
+            <p style="color: #777; font-size: 13px; margin-bottom: 15px; font-style: italic;">When the site opens, tap
+                the card number field and select <b>Paste</b>.</p>
+            <p style="color: #333; font-size: 15px; margin-bottom: 5px;">Remember your PIN:</p>
+            <div id="verifyPinDisplay"
+                style="font-size: 28px; font-weight: bold; letter-spacing: 3px; color: #2a5298; margin-bottom: 20px;">
+            </div>
+            <button class="btn btn-success" id="openVerifySiteBtn">Open Website</button>
+            <button class="btn btn-secondary"
+                onclick="document.getElementById('verifyAlertModal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+
+    <div id="editCardModal" class="modal">
+        <div class="custom-alert">
+            <h3 style="margin-top: 0;">Edit Card Details</h3>
+            <label>Brand:</label>
+            <input type="text" id="editCardBrand">
+            <label>Initial Balance ($):</label>
+            <input type="number" id="editCardBalance" step="0.01">
+            <label>Card Number:</label>
+            <input type="text" id="editCardNumber">
+            <label>PIN:</label>
+            <input type="text" id="editCardPin">
+            <label>Check Balance URL:</label>
+            <input type="url" id="editBalanceUrl">
+
+            <div class="button-group" style="margin-top: 20px;">
+                <button class="btn" onclick="saveCardEdit()">Save</button>
+                <button class="btn btn-secondary"
+                    onclick="document.getElementById('editCardModal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editTransModal" class="modal">
+        <div class="custom-alert">
+            <h3 style="margin-top: 0;">Edit Transaction</h3>
+            <input type="hidden" id="editTransRowId">
+
+            <label>Amount ($):</label>
+            <input type="number" id="editTransAmount" step="0.01">
+            <label>Note:</label>
+            <input type="text" id="editTransNote">
+
+            <div class="button-group" style="margin-top: 20px;">
+                <button class="btn" onclick="saveTransEdit()">Update</button>
+                <button class="btn btn-secondary"
+                    onclick="document.getElementById('editTransModal').style.display='none'">Cancel</button>
+            </div>
+            <hr>
+            <button class="btn" style="background: #d9534f;" onclick="deleteTransaction()">Delete Transaction</button>
+        </div>
+    </div>
+
+    <script>
+        let currentCards = [];
+        let currentTransactions = [];
+        let activeCardId = null;
+        let showingArchived = false;
+
+        window.onload = function () {
+            google.script.run
+                .withSuccessHandler(renderCards)
+                .withFailureHandler(function (error) {
+                    document.getElementById('loadingText').innerHTML = '<span style="color:#d9534f;"><b>Data Error:</b> ' + error.message + '</span>';
+                    document.querySelector('.spinner').style.display = 'none';
+                })
+                .getCards();
+        };
+
+        function showLoading(message) {
+            document.getElementById('loadingText').innerText = message || 'Loading your wallet...';
+            document.querySelector('.spinner').style.display = 'block';
+            showView('loading');
+        }
+
+        function showView(viewId) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('addCardView').classList.add('hidden');
+            document.getElementById('cardDetailView').classList.add('hidden');
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        function toggleFormFields() {
+            const type = document.getElementById('cardType').value;
+            if (type === 'Digital') {
+                document.getElementById('imageUploadDiv').classList.remove('hidden');
+                document.getElementById('physicalInputs').classList.add('hidden');
+            } else {
+                document.getElementById('imageUploadDiv').classList.add('hidden');
+                document.getElementById('physicalInputs').classList.remove('hidden');
+            }
+        }
+
+        function toggleArchiveView() {
+            showingArchived = !showingArchived;
+            renderCards(currentCards);
+        }
+
+        function renderCards(cards) {
+            currentCards = cards;
+            const list = document.getElementById('cardList');
+            list.innerHTML = '';
+
+            document.getElementById('toggleViewLink').innerText = showingArchived ? 'Show Active' : 'Show Archived';
+            document.getElementById('dashboardTitle').innerText = showingArchived ? 'Archived Cards' : 'My Cards';
+            document.getElementById('addCardBtn').style.display = showingArchived ? 'none' : 'block';
+
+            const displayCards = cards.filter(function (c) {
+                return showingArchived ? c.archived : !c.archived;
+            });
+
+            if (displayCards.length === 0) {
+                list.innerHTML = showingArchived ? '<p>No archived cards found.</p>' : '<p>No active cards found. Add one below!</p>';
+            } else {
+                displayCards.forEach(function (card) {
+                    const div = document.createElement('div');
+                    div.className = card.archived ? 'card archived' : 'card';
+
+                    let subtext = card.type + ' Card';
+                    if (card.cardNumber) subtext += ' (...' + card.cardNumber.toString().slice(-4) + ')';
+
+                    div.innerHTML =
+                        '<div class="card-title">' + card.brand + '</div>' +
+                        '<div class="card-subtitle">' + subtext + '</div>' +
+                        '<div>Balance: <span class="balance">$' + card.current.toFixed(2) + '</span></div>';
+
+                    div.onclick = function () { openCardDetail(card); };
+                    list.appendChild(div);
+                });
+            }
+            showView('dashboard');
+        }
+
+        function saveNewCard() {
+            const brand = document.getElementById('cardBrand').value.trim() || 'Unknown Brand';
+            const type = document.getElementById('cardType').value;
+            const balance = parseFloat(document.getElementById('initialBalance').value);
+            const cardNumber = document.getElementById('cardNumber').value.trim();
+            const pin = document.getElementById('cardPin').value.trim();
+            const balanceUrl = document.getElementById('balanceUrl').value.trim();
+            const fileInput = document.getElementById('cardImage');
+
+            if (!balance || balance <= 0) return alert('Please enter a valid balance.');
+
+            showLoading('Saving new card...');
+
+            if (type === 'Digital' && fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onloadend = function () {
+                    google.script.run.withSuccessHandler(renderCards).saveCard(brand, type, balance, reader.result, file.name, "", "", "");
+                }
+                reader.readAsDataURL(file);
+            } else {
+                google.script.run.withSuccessHandler(renderCards).saveCard(brand, type, balance, null, null, cardNumber, pin, balanceUrl);
+            }
+
+            document.getElementById('cardBrand').value = '';
+            document.getElementById('initialBalance').value = '';
+            document.getElementById('cardNumber').value = '';
+            document.getElementById('cardPin').value = '';
+            document.getElementById('balanceUrl').value = '';
+            if (fileInput) fileInput.value = '';
+            document.getElementById('cardType').value = 'Physical';
+            toggleFormFields();
+        }
+
+        function verifyBalance(cardNumber, pin, targetUrl) {
+            if (!cardNumber || !targetUrl) return;
+
+            var pinText = pin ? pin : 'N/A';
+
+            var showCustomModal = function () {
+                document.getElementById('verifyPinDisplay').innerText = pinText;
+                document.getElementById('verifyAlertModal').style.display = 'block';
+
+                document.getElementById('openVerifySiteBtn').onclick = function () {
+                    document.getElementById('verifyAlertModal').style.display = 'none';
+                    window.open(targetUrl, '_blank');
+                };
+            };
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(cardNumber).then(showCustomModal).catch(showCustomModal);
+            } else {
+                showCustomModal();
+            }
+        }
+
+        function openCardDetail(card) {
+            activeCardId = card.id;
+
+            // Update the new dynamic visual card
+            document.getElementById('visualBrandName').innerText = card.brand;
+
+            let displayNum = card.cardNumber ? "Card #: " + card.cardNumber : "";
+            let displayPin = card.pin ? "PIN: " + card.pin : "";
+
+            document.getElementById('visualCardNumber').innerText = displayNum;
+            document.getElementById('visualCardPin').innerText = displayPin;
+
+            document.getElementById('detailBalance').innerText = '$' + card.current.toFixed(2);
+
+            const archBtn = document.getElementById('archiveActionBtn');
+            if (card.archived) {
+                archBtn.innerText = 'Unarchive Card';
+                archBtn.style.backgroundColor = '#2a5298';
+                archBtn.onclick = function () { processArchive(card.id, false); };
+            } else {
+                archBtn.innerText = 'Archive Card';
+                archBtn.style.backgroundColor = '#6c757d';
+                archBtn.onclick = function () { processArchive(card.id, true); };
+            }
+
+            // Clear out the extra info box since we moved the details
+            const infoContainer = document.getElementById('detailExtraInfo');
+            infoContainer.innerHTML = '';
+
+            if (card.cardNumber && card.balanceUrl) {
+                var btn = document.createElement('button');
+                btn.className = 'btn btn-success';
+                btn.innerText = 'Check Balance Online';
+                btn.onclick = function () { verifyBalance(card.cardNumber, card.pin, card.balanceUrl); };
+                infoContainer.appendChild(btn);
+            }
+
+            const imgContainer = document.getElementById('detailImageContainer');
+            imgContainer.innerHTML = '';
+            if (card.url) {
+                var btn = document.createElement('button');
+                btn.className = 'btn btn-secondary';
+                btn.innerText = 'View Digital Barcode';
+                btn.onclick = function () { window.open(card.url, '_blank'); };
+                imgContainer.appendChild(btn);
+            }
+
+            document.getElementById('deductAmount').value = '';
+            document.getElementById('transactionNote').value = '';
+            document.getElementById('transactionHistory').innerHTML = 'Loading...';
+
+            showView('cardDetailView');
+            google.script.run.withSuccessHandler(renderTransactions).getTransactions(card.id);
+        }
+
+        function processArchive(cardId, status) {
+            showLoading(status ? 'Archiving card...' : 'Restoring card...');
+            google.script.run.withSuccessHandler(function (cards) {
+                renderCards(cards);
+            }).toggleArchive(cardId, status);
+        }
+
+        function openEditCardModal() {
+            let activeCard = null;
+            for (let i = 0; i < currentCards.length; i++) {
+                if (currentCards[i].id === activeCardId) {
+                    activeCard = currentCards[i];
+                    break;
+                }
+            }
+            if (!activeCard) return;
+
+            document.getElementById('editCardBrand').value = activeCard.brand;
+            document.getElementById('editCardBalance').value = activeCard.initial;
+            document.getElementById('editCardNumber').value = activeCard.cardNumber || '';
+            document.getElementById('editCardPin').value = activeCard.pin || '';
+            document.getElementById('editBalanceUrl').value = activeCard.balanceUrl || '';
+            document.getElementById('editCardModal').style.display = 'block';
+        }
+
+        function saveCardEdit() {
+            const newBrand = document.getElementById('editCardBrand').value.trim() || 'Unknown Brand';
+            const newBal = parseFloat(document.getElementById('editCardBalance').value);
+            const newNum = document.getElementById('editCardNumber').value.trim();
+            const newPin = document.getElementById('editCardPin').value.trim();
+            const newUrl = document.getElementById('editBalanceUrl').value.trim();
+
+            if (!newBal || newBal <= 0) return alert('Please enter a valid balance.');
+
+            document.getElementById('editCardModal').style.display = 'none';
+            showLoading('Syncing data...');
+
+            google.script.run.withSuccessHandler(function (cards) {
+                renderCards(cards);
+                refreshActiveCardView(cards);
+            }).updateCardDetails(activeCardId, newBrand, newBal, newNum, newPin, newUrl);
+        }
+
+        function openEditTransModal(index) {
+            const t = currentTransactions[index];
+            document.getElementById('editTransRowId').value = t.rowId;
+            document.getElementById('editTransAmount').value = t.amount;
+            document.getElementById('editTransNote').value = t.note;
+            document.getElementById('editTransModal').style.display = 'block';
+        }
+
+        function saveTransEdit() {
+            const rowId = document.getElementById('editTransRowId').value;
+            const newAmt = parseFloat(document.getElementById('editTransAmount').value);
+            const newNote = document.getElementById('editTransNote').value.trim();
+
+            if (!newAmt || newAmt <= 0) return alert('Please enter a valid amount.');
+
+            document.getElementById('editTransModal').style.display = 'none';
+            showLoading('Syncing data...');
+
+            google.script.run.withSuccessHandler(function (cards) {
+                renderCards(cards);
+                refreshActiveCardView(cards);
+            }).editTransaction(rowId, activeCardId, newAmt, newNote);
+        }
+
+        function deleteTransaction() {
+            const rowId = document.getElementById('editTransRowId').value;
+            if (!confirm("Are you sure you want to delete this transaction?")) return;
+
+            document.getElementById('editTransModal').style.display = 'none';
+            showLoading('Syncing data...');
+
+            google.script.run.withSuccessHandler(function (cards) {
+                renderCards(cards);
+                refreshActiveCardView(cards);
+            }).deleteTransaction(rowId, activeCardId);
+        }
+
+        function refreshActiveCardView(cards) {
+            let updatedCard = null;
+            for (let i = 0; i < cards.length; i++) {
+                if (cards[i].id === activeCardId) {
+                    updatedCard = cards[i];
+                    break;
+                }
+            }
+            if (updatedCard) {
+                openCardDetail(updatedCard);
+            } else {
+                showView('dashboard');
+            }
+        }
+
+        function renderTransactions(trans) {
+            currentTransactions = trans;
+            const div = document.getElementById('transactionHistory');
+
+            if (trans.length === 0) {
+                div.innerHTML = '<p style="color:#666; font-size:14px;">No purchases yet.</p>';
+                return;
+            }
+            let html = '';
+            for (let i = 0; i < trans.length; i++) {
+                let t = trans[i];
+                let noteHtml = t.note ? '<div class="history-note">📝 ' + t.note + '</div>' : '';
+                html +=
+                    '<div class="history-item" onclick="openEditTransModal(' + i + ')">' +
+                    '<div class="history-top-row">' +
+                    '<div class="history-details">' +
+                    '<span class="history-date">' + t.date + '</span>' +
+                    '<span class="history-balance">Remaining: $' + t.balance.toFixed(2) + '</span>' +
+                    '</div>' +
+                    '<div>' +
+                    '<span class="history-amount">-$' + t.amount.toFixed(2) + '</span>' +
+                    '<span class="edit-hint">✎</span>' +
+                    '</div>' +
+                    '</div>' +
+                    noteHtml +
+                    '</div>';
+            }
+            div.innerHTML = html;
+        }
+
+        function logTransaction() {
+            const amount = parseFloat(document.getElementById('deductAmount').value);
+            const note = document.getElementById('transactionNote').value.trim();
+
+            if (!amount || amount <= 0) return alert('Please enter a valid amount.');
+
+            showLoading('Syncing data...');
+            google.script.run.withSuccessHandler(function (cards) {
+                document.getElementById('transactionNote').value = '';
+                renderCards(cards);
+                refreshActiveCardView(cards);
+            }).addTransaction(activeCardId, amount, note);
+        }
+    </script>
+</body>
+
+</html>
