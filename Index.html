@@ -254,6 +254,45 @@
             cursor: pointer;
         }
 
+        .wallet-stats-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .stat-tile {
+            flex: 1;
+            min-width: 0;
+            background: #fff;
+            border: 1px solid #e0e0e8;
+            border-radius: 8px;
+            padding: 10px 8px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            line-height: 1.25;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 15px;
+            font-weight: 700;
+            color: #2a5298;
+            line-height: 1.2;
+        }
+
+        .stat-label.stat-year-caption {
+            text-transform: none;
+            font-weight: 600;
+        }
+
         /* Splash Screen */
         .splash-screen {
             display: flex;
@@ -376,6 +415,20 @@
         <div class="title-header">
             <h2 id="dashboardTitle">My Cards</h2>
             <span class="link-action" id="toggleViewLink" onclick="toggleArchiveView()">Show Archived</span>
+        </div>
+        <div id="walletStatsRow" class="wallet-stats-row hidden">
+            <div class="stat-tile">
+                <div class="stat-label">Last 30 days</div>
+                <div class="stat-value" id="statSpent30">$0.00</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label stat-year-caption" id="statYearLine">Spent in 2026</div>
+                <div class="stat-value" id="statSpentYear">$0.00</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Avg purchase (30d)</div>
+                <div class="stat-value" id="statAvg30">$0.00</div>
+            </div>
         </div>
         <div id="cardList"></div>
         <button class="btn" id="addCardBtn" onclick="showView('addCardView')">+ Add New Card</button>
@@ -521,6 +574,33 @@
         let currentTransactions = [];
         let activeCardId = null;
         let showingArchived = false;
+        let walletStats = null;
+
+        function normalizeDashboardPayload(data) {
+            if (data && data.cards) {
+                return { cards: data.cards, stats: data.stats };
+            }
+            return { cards: [], stats: null };
+        }
+
+        function renderWalletStats(stats) {
+            if (!stats) return;
+            document.getElementById('statSpent30').textContent = '$' + stats.spentLast30.toFixed(2);
+            document.getElementById('statYearLine').textContent = 'Spent in ' + stats.yearLabel;
+            document.getElementById('statSpentYear').textContent = '$' + stats.spentYear.toFixed(2);
+            document.getElementById('statAvg30').textContent = '$' + stats.avgPurchaseLast30.toFixed(2);
+        }
+
+        function updateWalletStatsVisibility() {
+            var row = document.getElementById('walletStatsRow');
+            if (!row) return;
+            if (showingArchived || !walletStats) {
+                row.classList.add('hidden');
+            } else {
+                renderWalletStats(walletStats);
+                row.classList.remove('hidden');
+            }
+        }
 
         window.onload = function () {
             google.script.run
@@ -559,17 +639,22 @@
 
         function toggleArchiveView() {
             showingArchived = !showingArchived;
-            renderCards(currentCards);
+            renderCards({ cards: currentCards, stats: walletStats });
         }
 
-        function renderCards(cards) {
-            currentCards = cards;
+        function renderCards(payload) {
+            var normalized = normalizeDashboardPayload(payload);
+            currentCards = normalized.cards;
+            walletStats = normalized.stats;
+            const cards = currentCards;
             const list = document.getElementById('cardList');
             list.innerHTML = '';
 
             document.getElementById('toggleViewLink').innerText = showingArchived ? 'Show Active' : 'Show Archived';
             document.getElementById('dashboardTitle').innerText = showingArchived ? 'Archived Cards' : 'My Cards';
             document.getElementById('addCardBtn').style.display = showingArchived ? 'none' : 'block';
+
+            updateWalletStatsVisibility();
 
             const displayCards = cards.filter(function (c) {
                 return showingArchived ? c.archived : !c.archived;
@@ -731,8 +816,8 @@
 
         function processArchive(cardId, status) {
             showLoading(status ? 'Archiving card...' : 'Restoring card...');
-            google.script.run.withSuccessHandler(function (cards) {
-                renderCards(cards);
+            google.script.run.withSuccessHandler(function (payload) {
+                renderCards(payload);
             }).toggleArchive(cardId, status);
         }
 
@@ -765,9 +850,9 @@
             document.getElementById('editCardModal').style.display = 'none';
             showLoading('Syncing data...');
 
-            google.script.run.withSuccessHandler(function (cards) {
-                renderCards(cards);
-                refreshActiveCardView(cards);
+            google.script.run.withSuccessHandler(function (payload) {
+                renderCards(payload);
+                refreshActiveCardView(payload);
             }).updateCardDetails(activeCardId, newBrand, newBal, newNum, newPin, newUrl);
         }
 
@@ -788,9 +873,9 @@
             document.getElementById('editTransModal').style.display = 'none';
             showLoading('Syncing data...');
 
-            google.script.run.withSuccessHandler(function (cards) {
-                renderCards(cards);
-                refreshActiveCardView(cards);
+            google.script.run.withSuccessHandler(function (payload) {
+                renderCards(payload);
+                refreshActiveCardView(payload);
             }).editTransaction(rowId, activeCardId, newAmt, newNote);
         }
 
@@ -800,13 +885,15 @@
             document.getElementById('editTransModal').style.display = 'none';
             showLoading('Syncing data...');
 
-            google.script.run.withSuccessHandler(function (cards) {
-                renderCards(cards);
-                refreshActiveCardView(cards);
+            google.script.run.withSuccessHandler(function (payload) {
+                renderCards(payload);
+                refreshActiveCardView(payload);
             }).deleteTransaction(rowId, activeCardId);
         }
 
-        function refreshActiveCardView(cards) {
+        function refreshActiveCardView(payload) {
+            var normalized = normalizeDashboardPayload(payload);
+            var cards = normalized.cards;
             let updatedCard = null;
             for (let i = 0; i < cards.length; i++) {
                 if (cards[i].id === activeCardId) {
@@ -856,10 +943,10 @@
             if (!amount || amount <= 0) return alert('Please enter a valid amount.');
 
             showLoading('Syncing data...');
-            google.script.run.withSuccessHandler(function (cards) {
+            google.script.run.withSuccessHandler(function (payload) {
                 document.getElementById('transactionNote').value = '';
-                renderCards(cards);
-                refreshActiveCardView(cards);
+                renderCards(payload);
+                refreshActiveCardView(payload);
             }).addTransaction(activeCardId, amount, note);
         }
     </script>

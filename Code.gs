@@ -5,6 +5,56 @@ function doGet() {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+function computeWalletStats(cardsData, transData) {
+    const activeIds = {};
+    for (let i = 1; i < cardsData.length; i++) {
+        const id = cardsData[i][0];
+        const isArchived = (cardsData[i][9] === true || cardsData[i][9] === 'TRUE' || cardsData[i][9] === 'true');
+        if (!isArchived && id) {
+            activeIds[id] = true;
+        }
+    }
+
+    const now = new Date();
+    const cutoff30 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+    cutoff30.setHours(0, 0, 0, 0);
+    const currentYear = now.getFullYear();
+
+    let spentLast30 = 0;
+    let spentYear = 0;
+    let count30 = 0;
+
+    for (let j = 1; j < transData.length; j++) {
+        const cardId = transData[j][1];
+        if (!activeIds[cardId]) continue;
+
+        const amount = parseFloat(transData[j][2]) || 0;
+        if (amount <= 0) continue;
+
+        const raw = transData[j][0];
+        const transDate = raw instanceof Date ? raw : new Date(raw);
+        if (isNaN(transDate.getTime())) continue;
+
+        if (transDate.getTime() >= cutoff30.getTime()) {
+            spentLast30 += amount;
+            count30++;
+        }
+
+        if (transDate.getFullYear() === currentYear) {
+            spentYear += amount;
+        }
+    }
+
+    const avgPurchaseLast30 = count30 > 0 ? spentLast30 / count30 : 0;
+
+    return {
+        spentLast30: Math.round(spentLast30 * 100) / 100,
+        spentYear: Math.round(spentYear * 100) / 100,
+        avgPurchaseLast30: Math.round(avgPurchaseLast30 * 100) / 100,
+        yearLabel: String(currentYear)
+    };
+}
+
 function getCards() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const cardsSheet = ss.getSheetByName("Cards");
@@ -46,7 +96,10 @@ function getCards() {
             archived: isArchived
         });
     }
-    return cards;
+    return {
+        cards: cards,
+        stats: computeWalletStats(cardsData, transData)
+    };
 }
 
 function saveCard(brand, type, initialBalance, imageBase64, filename, cardNumber, pin, balanceUrl) {
