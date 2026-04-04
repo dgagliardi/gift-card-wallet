@@ -13,7 +13,6 @@ The script auto-detects the only user in the DB. Run AFTER:
 import sys
 import os
 import sqlite3
-import math
 from pathlib import Path
 
 try:
@@ -64,8 +63,23 @@ def clean_pin(val):
 
 print(f"Reading {XLSX_PATH}...")
 xl = pd.read_excel(XLSX_PATH, sheet_name=None)
+
+missing_sheets = {"Cards", "Transactions"} - set(xl.keys())
+if missing_sheets:
+    print(f"ERROR: xlsx is missing sheets: {missing_sheets}")
+    sys.exit(1)
+
 cards_df = xl["Cards"]
 txns_df = xl["Transactions"]
+
+REQUIRED_CARD_COLS = {"Card ID", "Brand", "Type", "Date Added", "Initial Balance"}
+REQUIRED_TXN_COLS = {"Date", "Card Id", "Amount Deducted"}
+for label, df, required in [("Cards", cards_df, REQUIRED_CARD_COLS), ("Transactions", txns_df, REQUIRED_TXN_COLS)]:
+    missing_cols = required - set(df.columns)
+    if missing_cols:
+        print(f"ERROR: '{label}' sheet is missing columns: {missing_cols}")
+        sys.exit(1)
+
 print(f"  Found {len(cards_df)} cards, {len(txns_df)} transactions")
 
 # --- Connect to DB ------------------------------------------------------------
@@ -157,16 +171,15 @@ for _, row in cards_df.iterrows():
 # --- Import transactions ------------------------------------------------------
 
 existing_txn_ids = {r[0] for r in cur.execute("SELECT id FROM gift_card_transaction WHERE userId = ?", (user_id,)).fetchall()}
-# Use a stable ID derived from the source data (date + cardId + amount)
+# Stable ID: row index disambiguates same-card same-day same-amount transactions
 txns_inserted = 0
 
-for _, row in txns_df.iterrows():
+for row_idx, row in txns_df.iterrows():
     card_id = str(row["Card Id"])
     date_ms = to_ms(row["Date"]) or now_ms
     amount = clean_balance(row["Amount Deducted"])
 
-    # Stable synthetic ID so re-runs don't duplicate
-    synthetic_id = f"TXN_{card_id}_{date_ms}_{int(amount * 100)}"
+    synthetic_id = f"TXN_{card_id}_{date_ms}_{int(amount * 100)}_{row_idx}"
     if synthetic_id in existing_txn_ids:
         print(f"  Skipping existing txn: {synthetic_id}")
         continue

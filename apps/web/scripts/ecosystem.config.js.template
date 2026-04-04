@@ -1,19 +1,22 @@
+// Template — copy to ecosystem.config.js and replace YOUR_VPS_USER with your Linux username.
+// ecosystem.config.js is gitignored (machine-specific); this template is committed instead.
+
 module.exports = {
   apps: [
     {
       name: "giftcard",
       script: ".next/standalone/server.js",
       node_args: "--env-file=.env",
-      cwd: "/home/brenni6/apps/gift-card-wallet/apps/web",
+      cwd: "/home/YOUR_VPS_USER/apps/gift-card-wallet/apps/web",
       instances: 1,
       exec_mode: "fork",
       env: {
         NODE_ENV: "production",
         PORT: 5022,
       },
-      log_file: "/home/brenni6/apps/gift-card-wallet/logs/app.log",
-      out_file: "/home/brenni6/apps/gift-card-wallet/logs/out.log",
-      error_file: "/home/brenni6/apps/gift-card-wallet/logs/error.log",
+      log_file: "/home/YOUR_VPS_USER/apps/gift-card-wallet/logs/app.log",
+      out_file: "/home/YOUR_VPS_USER/apps/gift-card-wallet/logs/out.log",
+      error_file: "/home/YOUR_VPS_USER/apps/gift-card-wallet/logs/error.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       merge_logs: true,
       max_memory_restart: "500M",
