@@ -11,7 +11,9 @@ data/
 .DS_Store
 .env
 .env.local
+.env.production
 .env.*.local
+apps/web/scripts/ecosystem.config.js
 tsconfig.tsbuildinfo
 packages/domain/dist
 apps/web/public/sw.js
