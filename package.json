@@ -1,0 +1,12 @@
+{
+  "name": "gift-card-wallet",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @gift-card-wallet/web dev",
+    "build": "pnpm --filter @gift-card-wallet/web build",
+    "test": "pnpm -r test",
+    "lint": "pnpm --filter @gift-card-wallet/web lint",
+    "db:push": "pnpm --filter @gift-card-wallet/web db:push"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

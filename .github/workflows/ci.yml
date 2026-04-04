@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - name: Install
+        run: pnpm install
+      - name: Test
+        run: pnpm test
+      - name: Typecheck domain package
+        run: pnpm --filter @gift-card-wallet/domain exec tsc
+      - name: Lint
+        run: pnpm --filter @gift-card-wallet/web lint
+      - name: Build web
+        run: pnpm --filter @gift-card-wallet/web build

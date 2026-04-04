@@ -1,85 +1,93 @@
-# 💳 Universal Gift Card & Prepaid Wallet
+# Universal Gift Card & Prepaid Wallet
 
-A lightweight, mobile-friendly web app to securely track your physical and digital gift cards, prepaid cards, and store credits. 
+A lightweight, mobile-friendly way to track physical and digital gift cards, prepaid cards, and store credits. This repository supports **two deployments**:
 
-Tired of juggling physical cards and trying to remember the remaining balances on your digital store credits? This tracker runs entirely within your own personal Google Account using Google Sheets and Google Apps Script, acting as a private digital wallet.
+| Deployment | Location | Data |
+|------------|----------|------|
+| **Google Sheets** | [apps/sheets/](apps/sheets/) — copy `Code.gs` and `Index.html` into Apps Script | Your Google Sheet + Drive |
+| **VPS / self-hosted** | [apps/web/](apps/web/) — Next.js, SQLite, local file uploads | `DATABASE_PATH` + `UPLOADS_PATH` on disk |
 
-### ✨ Features
-* **100% Private:** Your card numbers, PINs, and purchase history never leave your Google Account. There is no third-party database.
-* **No App Store Needed:** Installs directly to your phone's home screen as a Progressive Web App (PWA).
-* **Universal Tracking:** Add any brand (Costco, Starbucks, Home Depot, Visa Prepaid, etc.).
-* **Instant Verification:** Add custom balance-check URLs for any store. Securely copy your card details and verify your exact balance with one tap.
-* **Dynamic UI:** Generates clean, glossy digital cards natively in the browser. 
+Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/](packages/domain/) and is covered by unit tests. The Sheets app reimplements the same behavior in Apps Script; if you change stats or balance rules in `packages/domain`, update `apps/sheets/Code.gs` accordingly and run `pnpm test` before merging.
 
----
+### Features
 
-## 🛠️ Phase 1: Database Setup (Google Sheets)
-Your Google Sheet acts as the secure, private database for your app. 
-
-1. Go to Google Drive and create a new **Google Sheets** document. 
-2. Name the document **Gift Card Tracker**.
-3. At the bottom of the screen, double-click "Sheet1" and rename it to **Cards**.
-4. Set up the exact column headers in row 1 of the **Cards** sheet (Columns A through J):
-   * A1: `Card ID`
-   * B1: `Brand`
-   * C1: `Type`
-   * D1: `Date Added`
-   * E1: `Initial Balance`
-   * F1: `Image URL`
-   * G1: `Card Number`
-   * H1: `PIN`
-   * I1: `Check Balance URL`
-   * J1: `Archived`
-
-5. Click the **+** icon at the bottom left to create a second tab. Name it exactly: **Transactions**.
-6. Set up the exact column headers in row 1 of the **Transactions** sheet (Columns A through E):
-   * A1: `Date`
-   * B1: `Card Id`
-   * C1: `Amount Deducted`
-   * D1: `Remaining Balance`
-   * E1: `Note`
+- Physical and digital cards, balances, transactions, archive, spending stats (same behavior as the original Sheets app).
+- **VPS:** [better-auth](https://www.better-auth.com/) with **Google OAuth** (recommended), optional email/password, Drizzle + SQLite, optional PWA. Digital card **photos** are stored on the server and shown in the list and detail views for checkout.
 
 ---
 
-## ⚙️ Phase 2: App Logic Setup (Google Apps Script)
-This is where we add the code that turns your spreadsheet into a mobile app. 
+## Monorepo layout
 
-1. From your Google Sheet top menu, click **Extensions > Apps Script**. A new browser tab will open.
-2. At the top left, click "Untitled project" and rename it to **Gift Card Wallet App**.
-3. You will see a file named `Code.gs`. Delete all the default text inside it.
-4. Copy all the text from the `Code.gs` file in this repository and paste it into your editor.
-5. Next to the "Files" header on the left menu, click the **+** icon and select **HTML**.
-6. Name this new file exactly: **Index** *(Note: it is case-sensitive, use a capital 'I')*.
-7. Delete the default HTML code and paste all the text from the `Index.html` file in this repository.
-8. Click the **Save** icon (floppy disk) at the top.
+```text
+gift-card-wallet/
+  package.json              # pnpm workspaces
+  apps/
+    sheets/                 # Google Apps Script (Code.gs, Index.html)
+    web/                    # Next.js app for VPS
+  packages/
+    domain/                 # Zod types + computeWalletStats + balance helpers + Vitest
+```
 
----
+**Commands (from repo root):**
 
-## 🚀 Phase 3: Deployment (Publishing the App)
-Now we securely publish the code to your Google account so you can access it on your phone.
-
-1. In the top right corner of the Apps Script editor, click the blue **Deploy** button and select **New deployment**.
-2. Click the **Gear icon** next to "Select type" and check the box for **Web app**.
-3. Fill out the configuration exactly like this:
-   * **Description:** Wallet v1
-   * **Execute as:** Me (your email)
-   * **Who has access:** Only myself
-4. Click **Deploy**.
-5. **Authorization (Don't Panic!):** Google will ask for permission to let the script write to your Sheet. 
-   * Click **Review permissions** and choose your Google account.
-   * *Google will show a warning saying "Google hasn’t verified this app."* Because you are the one who literally just pasted the code, it is safe. 
-   * Click **Advanced** at the bottom of the warning.
-   * Click **Go to Gift Card Wallet App (unsafe)**.
-   * Click **Allow**.
-6. You will be presented with a **Web app URL**. Copy this link!
+- `pnpm install` — install all workspaces
+- `pnpm dev` — Next dev server (`apps/web`)
+- `pnpm build` — production build of `apps/web`
+- `pnpm test` — run `packages/domain` tests
+- `pnpm db:push` — apply Drizzle schema (creates `apps/web/data/` if needed)
 
 ---
 
-## 📱 Phase 4: Mobile Phone Setup
-Get the app onto your home screen for easy access at the checkout register.
+## Google Sheets deployment
 
-1. Send the **Web app URL** you just copied to your phone (via email, text, or a notes app).
-2. Open the link in your mobile browser (Safari for iPhone, Chrome for Android).
-3. **Save it as an app:**
-   * **iPhone (Safari):** Tap the Share icon at the bottom, scroll down, and tap **Add to Home Screen**.
-   * **Android (Chrome):** Tap the three-dot menu icon in the top right, and tap **Add to Home screen**.
+### Phase 1: Database setup (Google Sheets)
+
+1. Create a Google Sheet named **Gift Card Tracker**.
+2. Rename the first sheet to **Cards** and set row 1 (columns A–J):  
+   `Card ID`, `Brand`, `Type`, `Date Added`, `Initial Balance`, `Image URL`, `Card Number`, `PIN`, `Check Balance URL`, `Archived`
+3. Add a second sheet **Transactions** with row 1 (A–E):  
+   `Date`, `Card Id`, `Amount Deducted`, `Remaining Balance`, `Note`
+
+### Phase 2: Apps Script
+
+1. **Extensions → Apps Script**
+2. Paste all contents from [apps/sheets/Code.gs](apps/sheets/Code.gs) into `Code.gs`
+3. Add an HTML file named **Index** (capital I) and paste [apps/sheets/Index.html](apps/sheets/Index.html)
+4. Deploy as a **Web app** (Execute as: Me, access: Only yourself)
+
+---
+
+## VPS deployment (`apps/web`)
+
+1. **Environment** — copy [apps/web/.env.example](apps/web/.env.example) to `apps/web/.env.local` and set:
+   - `BETTER_AUTH_SECRET` — use at least 32 random bytes (e.g. `openssl rand -base64 32`)
+   - `BETTER_AUTH_URL` — must match how users reach the app (e.g. `https://wallet.example.com` — no trailing slash; include `NEXT_PUBLIC_BASE_PATH` in the site URL if you use one)
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — from [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (OAuth 2.0 Client ID, type **Web application**). Under **Authorized redirect URIs**, add:
+     - `https://YOUR_DOMAIN/api/auth/callback/google`
+     - For local dev: `http://localhost:3000/api/auth/callback/google` (adjust port if needed)
+   - `DATABASE_PATH` — SQLite file path (default: `./data/gift-card-wallet.db` under `apps/web`)
+   - `UPLOADS_PATH` — directory for card images (default: `./data/uploads`)
+   - `NEXT_PUBLIC_BASE_PATH` — if served behind a subpath (e.g. `/wallet`)
+   - Optional: `ENABLE_EMAIL_PASSWORD=true` to allow email/password sign-in in addition to Google (or as a dev fallback when Google keys are not set, email/password is enabled automatically)
+
+2. **Database:** from repo root: `pnpm db:push`
+
+3. **First run:** open `/setup`. With Google configured, use **Continue with Google**; the **first** user to sign in becomes **admin**. Without Google keys, the setup form falls back to email/password (dev-only convenience).
+
+4. **Production:** `pnpm build` then `pnpm start` in `apps/web` (Node). Optional: Docker with `output: "standalone"` and a persistent volume for `data/`.
+
+---
+
+## Dual-deployment checklist (PRs)
+
+When changing wallet behavior:
+
+- [ ] Updated `packages/domain` and `pnpm test` passes
+- [ ] If stats/balance logic changed, updated `apps/sheets/Code.gs` to match
+- [ ] If API or fields changed, updated `apps/web` Drizzle schema and UI as needed
+
+---
+
+## Mobile (Sheets web app)
+
+Open the deployed Web app URL on your phone and **Add to Home Screen** (Safari / Chrome) for a PWA-like shortcut.
