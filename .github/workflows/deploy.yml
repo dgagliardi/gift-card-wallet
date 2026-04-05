@@ -1,0 +1,45 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[deploy]')
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/apps/gift-card-wallet
+
+            echo "==> Pulling latest code..."
+            git pull
+
+            echo "==> Installing dependencies..."
+            CXX=/opt/rh/gcc-toolset-11/root/usr/bin/g++ \
+            CC=/opt/rh/gcc-toolset-11/root/usr/bin/gcc \
+            npm_config_python=/usr/bin/python3.8 \
+            pnpm install
+
+            echo "==> Building..."
+            pnpm build
+
+            echo "==> Copying static assets..."
+            cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+            cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+
+            echo "==> Restarting app..."
+            pm2 restart giftcard --update-env
+
+            echo "==> Done."
