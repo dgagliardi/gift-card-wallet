@@ -13,6 +13,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 5022,
+        HOSTNAME: "0.0.0.0",
       },
       log_file: "/home/YOUR_VPS_USER/apps/gift-card-wallet/logs/app.log",
       out_file: "/home/YOUR_VPS_USER/apps/gift-card-wallet/logs/out.log",
