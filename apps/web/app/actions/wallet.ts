@@ -6,7 +6,7 @@ import {
   type CardRow,
   type TransactionRow,
 } from "@gift-card-wallet/domain";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import fs from "node:fs";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
@@ -292,6 +292,70 @@ export async function deleteTransaction(txId: string, cardId: string) {
         eq(giftCardTransaction.userId, uid),
       ),
     );
+
+  revalidatePath("/");
+  return getWalletPayload();
+}
+
+export type AllTx = {
+  id: string;
+  date: string;
+  amount: number;
+  note: string;
+  cardBrand: string;
+  cardType: string;
+};
+
+export async function getAllTransactions(): Promise<AllTx[]> {
+  const session = await requireSession();
+  const uid = session.user.id;
+
+  const rows = await db
+    .select({
+      id: giftCardTransaction.id,
+      date: giftCardTransaction.date,
+      amount: giftCardTransaction.amount,
+      note: giftCardTransaction.note,
+      brand: giftCard.brand,
+      type: giftCard.type,
+    })
+    .from(giftCardTransaction)
+    .innerJoin(giftCard, eq(giftCardTransaction.cardId, giftCard.id))
+    .where(eq(giftCardTransaction.userId, uid))
+    .orderBy(desc(giftCardTransaction.date));
+
+  return rows.map((r) => ({
+    id: r.id,
+    date: new Date(r.date).toLocaleDateString(),
+    amount: r.amount,
+    note: r.note,
+    cardBrand: r.brand,
+    cardType: r.type,
+  }));
+}
+
+export async function updateCardImageFromForm(
+  cardId: string,
+  formData: FormData,
+) {
+  const session = await requireSession();
+  const uid = session.user.id;
+  const now = new Date();
+
+  const image = formData.get("image");
+  if (!(image instanceof File) || image.size === 0) return getWalletPayload();
+
+  const dir = userUploadDir(uid);
+  const safe = image.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const rel = `${uid}/${cardId}_${safe}`;
+  const full = path.join(dir, `${cardId}_${safe}`);
+  const buf = Buffer.from(await image.arrayBuffer());
+  fs.writeFileSync(full, buf);
+
+  await db
+    .update(giftCard)
+    .set({ imagePath: rel, updatedAt: now })
+    .where(and(eq(giftCard.id, cardId), eq(giftCard.userId, uid)));
 
   revalidatePath("/");
   return getWalletPayload();

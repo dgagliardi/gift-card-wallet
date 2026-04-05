@@ -3,14 +3,16 @@
 import type { WalletStats } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { WalletCard } from "@/app/actions/wallet";
+import type { AllTx, WalletCard } from "@/app/actions/wallet";
 import {
   addTransaction,
   deleteTransaction,
+  getAllTransactions,
   getTransactions,
   saveCardFromForm,
   toggleArchive,
   updateCardDetails,
+  updateCardImageFromForm,
 } from "@/app/actions/wallet";
 
 type Props = {
@@ -21,11 +23,9 @@ type Props = {
 export function WalletHome({ initialCards, initialStats }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  // Add card
   const [addOpen, setAddOpen] = useState(false);
-  const [detailCard, setDetailCard] = useState<WalletCard | null>(null);
-  const [txList, setTxList] = useState<
-    Awaited<ReturnType<typeof getTransactions>>
-  >([]);
   const [form, setForm] = useState({
     brand: "",
     type: "Physical" as "Physical" | "Digital",
@@ -36,6 +36,14 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     image: null as File | null,
   });
 
+  // Transaction history (all cards)
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [allTxList, setAllTxList] = useState<AllTx[]>([]);
+
+  // Card detail
+  const [detailCard, setDetailCard] = useState<WalletCard | null>(null);
+  const [imgVisible, setImgVisible] = useState(false);
+  const [editImage, setEditImage] = useState<File | null>(null);
   const [editForm, setEditForm] = useState({
     brand: "",
     initialBalance: "",
@@ -43,7 +51,9 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     pin: "",
     balanceUrl: "",
   });
-
+  const [txList, setTxList] = useState<
+    Awaited<ReturnType<typeof getTransactions>>
+  >([]);
   const [txAmount, setTxAmount] = useState("");
   const [txNote, setTxNote] = useState("");
 
@@ -53,8 +63,27 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     });
   }
 
-  function onImagePick(file: File | null) {
-    setForm((f) => ({ ...f, image: file }));
+  async function openHistory() {
+    const txs = await getAllTransactions();
+    setAllTxList(txs);
+    setHistoryOpen(true);
+  }
+
+  async function openDetail(c: WalletCard) {
+    setDetailCard(c);
+    setImgVisible(false);
+    setEditImage(null);
+    setEditForm({
+      brand: c.brand,
+      initialBalance: String(c.initial),
+      cardNumber: c.cardNumber,
+      pin: c.pin,
+      balanceUrl: c.balanceUrl,
+    });
+    setTxAmount("");
+    setTxNote("");
+    const txs = await getTransactions(c.id);
+    setTxList(txs);
   }
 
   async function submitAdd(e: React.FormEvent) {
@@ -83,21 +112,6 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     });
   }
 
-  async function openDetail(c: WalletCard) {
-    setDetailCard(c);
-    setEditForm({
-      brand: c.brand,
-      initialBalance: String(c.initial),
-      cardNumber: c.cardNumber,
-      pin: c.pin,
-      balanceUrl: c.balanceUrl,
-    });
-    setTxAmount("");
-    setTxNote("");
-    const txs = await getTransactions(c.id);
-    setTxList(txs);
-  }
-
   async function submitEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!detailCard) return;
@@ -110,6 +124,11 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         pin: editForm.pin,
         balanceUrl: editForm.balanceUrl,
       });
+      if (editImage && detailCard.type === "Digital") {
+        const fd = new FormData();
+        fd.set("image", editImage);
+        await updateCardImageFromForm(detailCard.id, fd);
+      }
       setDetailCard(null);
       refresh();
     });
@@ -130,12 +149,25 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     });
   }
 
+  const totalAllTx = allTxList.reduce((s, t) => s + t.amount, 0);
+
   return (
     <div className="space-y-6">
+
+      {/* Stats */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/40">
-        <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-          Spending ({initialStats.yearLabel})
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+            Spending ({initialStats.yearLabel})
+          </h2>
+          <button
+            type="button"
+            onClick={openHistory}
+            className="text-xs font-medium text-teal-600 hover:text-teal-500 dark:text-teal-400"
+          >
+            Transaction History →
+          </button>
+        </div>
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
           <div>
             <div className="text-xs text-slate-500">Last 30 days</div>
@@ -152,6 +184,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         </div>
       </section>
 
+      {/* Add card */}
       <button
         type="button"
         onClick={() => setAddOpen(true)}
@@ -161,6 +194,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         Add card
       </button>
 
+      {/* Card list */}
       <div className="space-y-3">
         {initialCards.map((c) => (
           <button
@@ -179,8 +213,13 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                 <img
                   src={c.imageUrl}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover blur-sm"
                 />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[10px] font-semibold text-white/90 drop-shadow">
+                    Tap to view
+                  </span>
+                </div>
               </div>
             ) : null}
             <div className="min-w-0 flex-1">
@@ -206,6 +245,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         ))}
       </div>
 
+      {/* Add card modal */}
       {addOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900">
@@ -231,19 +271,18 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               </label>
               {form.type === "Digital" ? (
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Photo (barcode / card)
+                  Barcode / card image
                   <input
                     type="file"
                     accept="image/*"
                     capture="environment"
                     className="mt-1 w-full text-sm"
                     onChange={(e) =>
-                      onImagePick(e.target.files?.[0] ?? null)
+                      setForm((f) => ({ ...f, image: e.target.files?.[0] ?? null }))
                     }
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    Saved on this server and shown here and at checkout — enter
-                    balance, number, and PIN manually.
+                    Stored securely on this server — only you can view it.
                   </p>
                 </label>
               ) : null}
@@ -301,9 +340,6 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
                 />
               </label>
-              <p className="text-xs text-slate-500">
-                Confirm amounts and card details before saving.
-              </p>
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -325,6 +361,50 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         </div>
       ) : null}
 
+      {/* Transaction history modal */}
+      {historyOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-teal-600 dark:text-teal-400">
+                Transaction History
+              </h3>
+              <button
+                type="button"
+                className="text-sm text-slate-500"
+                onClick={() => setHistoryOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Total: <span className="font-semibold text-slate-700 dark:text-slate-300">${totalAllTx.toFixed(2)}</span> across {allTxList.length} transactions
+            </p>
+            <ul className="mt-3 space-y-2 text-sm">
+              {allTxList.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex flex-col border-b border-slate-100 pb-2 dark:border-slate-800"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{t.cardBrand}</span>
+                    <span className="font-semibold">${t.amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>{t.date} · {t.cardType}</span>
+                    {t.note ? <span className="truncate">{t.note}</span> : null}
+                  </div>
+                </li>
+              ))}
+              {allTxList.length === 0 ? (
+                <li className="text-slate-500">No transactions yet.</li>
+              ) : null}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Card detail modal */}
       {detailCard ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900">
@@ -341,15 +421,38 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               </button>
             </div>
 
+            {/* Barcode image — tap to reveal */}
             {detailCard.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={detailCard.imageUrl}
-                alt=""
-                className="mt-3 max-h-[min(50vh,320px)] w-full rounded-lg object-contain bg-slate-100 dark:bg-slate-800"
-              />
+              <div className="mt-3">
+                {imgVisible ? (
+                  <div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={detailCard.imageUrl}
+                      alt=""
+                      className="max-h-[min(50vh,320px)] w-full rounded-lg object-contain bg-slate-100 dark:bg-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImgVisible(false)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 py-1.5 text-xs text-slate-600 dark:border-slate-600 dark:text-slate-400"
+                    >
+                      Hide barcode
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setImgVisible(true)}
+                    className="w-full rounded-lg border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-slate-500 hover:border-teal-400 hover:text-teal-600 dark:border-slate-600"
+                  >
+                    🔒 Show barcode
+                  </button>
+                )}
+              </div>
             ) : null}
 
+            {/* Edit form */}
             <form onSubmit={submitEdit} className="mt-4 space-y-2">
               <label className="block text-xs font-medium">Brand</label>
               <input
@@ -401,6 +504,20 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                 }
                 className="w-full rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950"
               />
+              {detailCard.type === "Digital" ? (
+                <label className="block text-xs font-medium">
+                  {detailCard.imageUrl ? "Replace barcode image" : "Upload barcode image"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="mt-1 w-full text-sm"
+                    onChange={(e) =>
+                      setEditImage(e.target.files?.[0] ?? null)
+                    }
+                  />
+                </label>
+              ) : null}
               <button
                 type="submit"
                 disabled={pending}
@@ -410,6 +527,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               </button>
             </form>
 
+            {/* Deduct */}
             <div className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-700">
               <h4 className="text-sm font-semibold">Deduct</h4>
               <form onSubmit={submitTx} className="mt-2 flex flex-wrap gap-2">
@@ -437,6 +555,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               </form>
             </div>
 
+            {/* Transaction history for this card */}
             <div className="mt-4">
               <h4 className="text-sm font-semibold">History</h4>
               <ul className="mt-2 space-y-2 text-sm">
@@ -472,6 +591,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               </ul>
             </div>
 
+            {/* Archive toggle */}
             <button
               type="button"
               className="mt-4 w-full rounded-lg border border-slate-300 py-2 text-sm dark:border-slate-600"
