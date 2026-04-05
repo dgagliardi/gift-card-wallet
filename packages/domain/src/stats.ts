@@ -1,15 +1,10 @@
 import type { CardRow, TransactionRow, WalletStats } from "./schemas";
 
 export function computeWalletStats(
-  cards: CardRow[],
+  _cards: CardRow[],
   transactions: TransactionRow[],
   now: Date = new Date(),
 ): WalletStats {
-  const activeIds = new Set<string>();
-  for (const c of cards) {
-    if (!c.archived && c.id) activeIds.add(c.id);
-  }
-
   const cutoff30 = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -23,8 +18,6 @@ export function computeWalletStats(
   let count30 = 0;
 
   for (const t of transactions) {
-    if (!activeIds.has(t.cardId)) continue;
-
     const amount = t.amount;
     if (amount <= 0) continue;
 
