@@ -66,6 +66,16 @@ export const auth = betterAuth({
     },
   },
   plugins: [nextCookies()],
+  advanced: {
+    // App runs behind nginx — trust proxy headers so better-auth reads the
+    // real client IP (for rate limiting) and honours X-Forwarded-Proto (so
+    // the session cookie gets the Secure flag on HTTPS, fixing mobile Safari).
+    useSecureCookies: process.env.NODE_ENV === "production",
+    ipAddress: {
+      ipAddressHeaders: ["x-forwarded-for", "x-real-ip"],
+      trustedProxies: ["127.0.0.1", "::1"],
+    },
+  },
 });
 
 export type Session = typeof auth.$Infer.Session;
