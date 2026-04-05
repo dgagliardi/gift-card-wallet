@@ -13,3 +13,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - name: Install
+        run: pnpm install
+      - name: Test
+        run: pnpm test
+      - name: Typecheck domain package
+        run: pnpm --filter @gift-card-wallet/domain exec tsc
+      - name: Lint
+        run: pnpm --filter @gift-card-wallet/web lint
+      - name: Build web
+        run: pnpm --filter @gift-card-wallet/web build
