@@ -275,8 +275,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
-                    className="mt-1 w-full text-sm"
+                                        className="mt-1 w-full text-sm"
                     onChange={(e) =>
                       setForm((f) => ({ ...f, image: e.target.files?.[0] ?? null }))
                     }
@@ -510,8 +509,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
-                    className="mt-1 w-full text-sm"
+                                        className="mt-1 w-full text-sm"
                     onChange={(e) =>
                       setEditImage(e.target.files?.[0] ?? null)
                     }
