@@ -98,6 +98,8 @@ export async function getWalletPayload() {
     };
   });
 
+  out.sort((a, b) => Number(a.archived) - Number(b.archived));
+
   return { cards: out, stats };
 }
 

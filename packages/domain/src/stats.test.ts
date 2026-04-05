@@ -3,7 +3,7 @@ import { computeCurrentBalance } from "./balance";
 import { computeWalletStats } from "./stats";
 
 describe("computeWalletStats", () => {
-  it("matches Apps Script behavior for active cards and positive amounts", () => {
+  it("includes all transactions regardless of card archive status", () => {
     const now = new Date("2026-06-15T12:00:00Z");
     const cards = [
       { id: "a", brand: "X", type: "Physical", initialBalance: 50, archived: false },
@@ -15,10 +15,10 @@ describe("computeWalletStats", () => {
       { cardId: "b", date: new Date("2026-06-14"), amount: 100 },
     ];
     const s = computeWalletStats(cards, transactions, now);
-    expect(s.spentLast30).toBe(15);
+    expect(s.spentLast30).toBe(115);
     expect(s.yearLabel).toBe("2026");
-    expect(s.spentYear).toBe(15);
-    expect(s.avgPurchaseLast30).toBe(7.5);
+    expect(s.spentYear).toBe(115);
+    expect(s.avgPurchaseLast30).toBe(38.33);
   });
 
   it("ignores non-positive amounts", () => {
