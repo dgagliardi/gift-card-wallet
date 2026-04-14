@@ -17,6 +17,7 @@ import {
   updateCardDetails,
   updateCardImageFromForm,
 } from "@/app/actions/wallet";
+import { extractReceiptTextWithGoogleVision } from "@/app/actions/receipt-vision";
 
 type Props = {
   initialCards: WalletCard[];
@@ -403,16 +404,29 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     try {
       const prepared = await prepareImageForReceiptOcr(file);
       const rawText = await extractTextFromImage(prepared);
-      if (rawText.trim().length < 12) {
-        setReceiptMessage(
-          "Could not read receipt text. Try brighter light, hold steady, or move closer.",
-        );
-        return;
+      let parsed = parseReceiptOcrText(rawText);
+      let usedVision = false;
+
+      const needsVision =
+        rawText.trim().length < 12 ||
+        parsed.amount === null ||
+        parsed.amount <= 0;
+
+      if (needsVision) {
+        const fd = new FormData();
+        fd.set("image", prepared);
+        const vision = await extractReceiptTextWithGoogleVision(fd);
+        if (vision.ok) {
+          parsed = parseReceiptOcrText(vision.text);
+          usedVision = true;
+        }
       }
-      const parsed = parseReceiptOcrText(rawText);
+
       if (parsed.amount === null || parsed.amount <= 0) {
         setReceiptMessage(
-          "Could not find a purchase amount. Check photo focus; totals near the bottom work best.",
+          rawText.trim().length < 12 && !usedVision
+            ? "Could not read receipt text. Try brighter light, hold steady, or move closer. With GOOGLE_VISION_API_KEY on the server, cloud OCR runs when local OCR fails."
+            : "Could not find a purchase amount. Check photo focus; totals near the bottom work best.",
         );
         return;
       }
@@ -440,7 +454,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         return;
       }
 
-      const noteBits = ["[OCR receipt]"];
+      const noteBits = [usedVision ? "[OCR receipt Vision]" : "[OCR receipt]"];
       if (parsed.merchant) noteBits.push(parsed.merchant);
       if (parsed.dateText) noteBits.push(parsed.dateText);
       if (parsed.summary) noteBits.push(parsed.summary);
