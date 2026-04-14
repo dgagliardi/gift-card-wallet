@@ -1,5 +1,13 @@
 import type { NextConfig } from "next";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import withPWAInit from "@ducanh2912/next-pwa";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const appVersion = JSON.parse(
+  readFileSync(join(__dirname, "package.json"), "utf8"),
+).version as string;
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -18,6 +26,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@gift-card-wallet/domain"],
   serverExternalPackages: ["better-sqlite3"],
+  env: {
+    NEXT_PUBLIC_APP_VERSION: appVersion,
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "8mb",

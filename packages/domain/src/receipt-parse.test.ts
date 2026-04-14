@@ -49,4 +49,17 @@ describe("parseReceiptOcrText", () => {
       summary: "we TOTAL 301.585°",
     });
   });
+
+  it("uses SUBTOTAL + TAX when TOTAL line is missing", () => {
+    const text = `
+      SUBTOTAL 294.79
+      TAX 6.50
+      **** TOTAL (unreadable)
+    `;
+
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(301.29);
+    expect(r.summary).toContain("SUBTOTAL");
+    expect(r.summary).toContain("TAX");
+  });
 });

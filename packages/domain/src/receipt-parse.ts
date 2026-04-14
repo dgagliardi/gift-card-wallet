@@ -18,6 +18,35 @@ function parseMoney(raw: string): number | null {
   return Math.round(value * 100) / 100;
 }
 
+/** Costco-style: SUBTOTAL + TAX when TOTAL line is unreadable or obscured. */
+function extractSubtotalPlusTax(text: string): { amount: number; summary: string } | null {
+  const sub = text.match(/SUBTOTAL[^\d]*([0-9oOsSbB.,]+)/i);
+  const tax = text.match(/\bTAX\b[^\d]*([0-9oOsSbB.,]+)/i);
+  if (!sub?.[1] || !tax?.[1]) return null;
+  const s = parseMoney(sub[1]);
+  const t = parseMoney(tax[1]);
+  if (s === null || t === null) return null;
+  const amount = Math.round((s + t) * 100) / 100;
+  return { amount, summary: `SUBTOTAL ${s.toFixed(2)} + TAX ${t.toFixed(2)}` };
+}
+
+/** Loose match when OCR mangles TOTAL (e.g. T0TAL, *** TOTAL). */
+function extractLooseTotalLine(text: string): { amount: number; summary: string } | null {
+  const patterns = [
+    /\*{1,4}\s*TOTAL\s*([0-9oOsSbB.,]+)/i,
+    /\bT[O0]TAL\b[^\d]*([0-9oOsSbB.,]{3,})/i,
+    /\bTOTAL\b[^\d]*([0-9oOsSbB.,]{3,})/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) {
+      const v = parseMoney(m[1]);
+      if (v !== null && v >= 1) return { amount: v, summary: m[0].slice(0, 120) };
+    }
+  }
+  return null;
+}
+
 export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
   const lines = text
     .split(/\r?\n/)
@@ -53,8 +82,24 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
     if (a.hasDecimal !== b.hasDecimal) return a.hasDecimal ? -1 : 1;
     return b.parsed! - a.parsed!;
   });
-  const best = rankedCandidates[0];
-  const amount = best?.parsed ?? null;
+  let best = rankedCandidates[0];
+  let amount = best?.parsed ?? null;
+  let summary = best?.line ?? "";
+
+  if (amount === null) {
+    const subTax = extractSubtotalPlusTax(text);
+    if (subTax) {
+      amount = subTax.amount;
+      summary = subTax.summary;
+    }
+  }
+  if (amount === null) {
+    const loose = extractLooseTotalLine(text);
+    if (loose) {
+      amount = loose.amount;
+      summary = loose.summary;
+    }
+  }
 
   const remainingMatch =
     text.match(
@@ -67,6 +112,6 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
     merchant: amount === null ? "" : merchant,
     dateText,
     remainingBalance,
-    summary: best?.line ?? "",
+    summary,
   };
 }
