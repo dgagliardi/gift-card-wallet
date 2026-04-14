@@ -7,10 +7,15 @@ export type ParsedReceiptOcr = {
 };
 
 function parseMoney(raw: string): number | null {
-  const cleaned = raw.replace(/[^0-9.,]/g, "").replace(/,/g, "");
+  const ocrNormalized = raw
+    .replace(/[oO]/g, "0")
+    .replace(/[sS]/g, "5")
+    .replace(/[bB]/g, "8");
+  const cleaned = ocrNormalized.replace(/[^0-9.,]/g, "").replace(/,/g, "");
   if (!cleaned) return null;
   const value = Number.parseFloat(cleaned);
-  return Number.isFinite(value) ? value : null;
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value * 100) / 100;
 }
 
 export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
@@ -31,12 +36,25 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
     text.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/)?.[0] ??
     "";
 
-  const totalLine =
-    lines.find((l) => /\b(total|amount|purchase)\b/i.test(l)) ?? "";
-  const totalMatch =
-    totalLine.match(/(?:CA\$|C\$|\$)?\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i) ??
-    text.match(/\btotal\b[^\d]*([0-9][0-9,]*(?:\.[0-9]{2})?)/i);
-  const amount = totalMatch?.[1] ? parseMoney(totalMatch[1]) : null;
+  const totalCandidates = lines.filter(
+    (l) =>
+      /\b(total|amount|purchase)\b/i.test(l) &&
+      !/\b(number|items?)\b/i.test(l),
+  );
+  const rankedCandidates = totalCandidates
+    .map((line) => {
+      const tokenMatch = line.match(/([0-9oOsSbB.,]{2,})/g);
+      const lastToken = tokenMatch?.at(-1) ?? "";
+      const parsed = parseMoney(lastToken);
+      return { line, parsed, hasDecimal: /[.,][0-9]{2,3}/.test(lastToken) };
+    })
+    .filter((x) => x.parsed !== null);
+  rankedCandidates.sort((a, b) => {
+    if (a.hasDecimal !== b.hasDecimal) return a.hasDecimal ? -1 : 1;
+    return b.parsed! - a.parsed!;
+  });
+  const best = rankedCandidates[0];
+  const amount = best?.parsed ?? null;
 
   const remainingMatch =
     text.match(
@@ -49,6 +67,6 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
     merchant: amount === null ? "" : merchant,
     dateText,
     remainingBalance,
-    summary: totalLine,
+    summary: best?.line ?? "",
   };
 }

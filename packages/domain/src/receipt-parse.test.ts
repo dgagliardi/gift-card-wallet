@@ -34,4 +34,19 @@ describe("parseReceiptOcrText", () => {
       summary: "",
     });
   });
+
+  it("handles Costco OCR noise and ignores total item count lines", () => {
+    const text = `
+      TOTAL NUMB R OF PRE-SCANNED ITEMS= 15
+      we TOTAL 301.585°
+    `;
+
+    expect(parseReceiptOcrText(text)).toEqual({
+      amount: 301.58,
+      merchant: "",
+      dateText: "",
+      remainingBalance: null,
+      summary: "we TOTAL 301.585°",
+    });
+  });
 });
