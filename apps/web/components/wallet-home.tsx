@@ -1,6 +1,7 @@
 "use client";
 
 import type { WalletStats } from "@gift-card-wallet/domain";
+import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { AllTx, WalletCard } from "@/app/actions/wallet";
@@ -35,6 +36,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     balanceUrl: "",
     image: null as File | null,
   });
+  const [addExtracting, setAddExtracting] = useState(false);
+  const [addExtractMessage, setAddExtractMessage] = useState("");
 
   // Transaction history (all cards)
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -51,6 +54,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     pin: "",
     balanceUrl: "",
   });
+  const [editExtracting, setEditExtracting] = useState(false);
+  const [editExtractMessage, setEditExtractMessage] = useState("");
   const [txList, setTxList] = useState<
     Awaited<ReturnType<typeof getTransactions>>
   >([]);
@@ -63,6 +68,37 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     });
   }
 
+  async function extractFromImage(file: File): Promise<{
+    cardNumber: string;
+    pin: string;
+    balance: number | null;
+  }> {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("eng");
+    try {
+      const {
+        data: { text },
+      } = await worker.recognize(file);
+      return parseGiftCardOcrText(text);
+    } finally {
+      await worker.terminate();
+    }
+  }
+
+  function makeExtractMessage(parsed: {
+    cardNumber: string;
+    pin: string;
+    balance: number | null;
+  }): string {
+    const found: string[] = [];
+    if (parsed.cardNumber) found.push("card number");
+    if (parsed.pin) found.push("PIN");
+    if (parsed.balance !== null) found.push("balance");
+    return found.length > 0
+      ? `Detected: ${found.join(", ")}.`
+      : "Could not detect card details from this image.";
+  }
+
   async function openHistory() {
     const txs = await getAllTransactions();
     setAllTxList(txs);
@@ -73,6 +109,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     setDetailCard(c);
     setImgVisible(false);
     setEditImage(null);
+    setEditExtractMessage("");
     setEditForm({
       brand: c.brand,
       initialBalance: String(c.initial),
@@ -99,6 +136,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     startTransition(async () => {
       await saveCardFromForm(fd);
       setAddOpen(false);
+      setAddExtractMessage("");
       setForm({
         brand: "",
         type: "Physical",
@@ -130,6 +168,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         await updateCardImageFromForm(detailCard.id, fd);
       }
       setDetailCard(null);
+      setEditExtractMessage("");
       refresh();
     });
   }
@@ -187,7 +226,10 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       {/* Add card */}
       <button
         type="button"
-        onClick={() => setAddOpen(true)}
+        onClick={() => {
+          setAddExtractMessage("");
+          setAddOpen(true);
+        }}
         disabled={pending}
         className="w-full rounded-lg bg-teal-600 py-3 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-60"
       >
@@ -275,13 +317,38 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   <input
                     type="file"
                     accept="image/*"
-                                        className="mt-1 w-full text-sm"
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, image: e.target.files?.[0] ?? null }))
-                    }
+                    className="mt-1 w-full text-sm"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setForm((f) => ({ ...f, image: file }));
+                      setAddExtractMessage("");
+                      if (!file) return;
+                      setAddExtracting(true);
+                      try {
+                        const parsed = await extractFromImage(file);
+                        setForm((f) => ({
+                          ...f,
+                          image: file,
+                          cardNumber: parsed.cardNumber || f.cardNumber,
+                          pin: parsed.pin || f.pin,
+                          initialBalance:
+                            parsed.balance !== null
+                              ? parsed.balance.toFixed(2)
+                              : f.initialBalance,
+                        }));
+                        setAddExtractMessage(makeExtractMessage(parsed));
+                      } catch {
+                        setAddExtractMessage("Could not extract details from this image.");
+                      } finally {
+                        setAddExtracting(false);
+                      }
+                    }}
                   />
                   <p className="mt-1 text-xs text-slate-500">
                     Stored securely on this server — only you can view it.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {addExtracting ? "Extracting details..." : addExtractMessage}
                   </p>
                 </label>
               ) : null}
@@ -342,7 +409,10 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setAddOpen(false)}
+                  onClick={() => {
+                    setAddExtractMessage("");
+                    setAddOpen(false);
+                  }}
                   className="flex-1 rounded-lg border border-slate-300 py-2 text-sm dark:border-slate-600"
                 >
                   Cancel
@@ -509,11 +579,35 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   <input
                     type="file"
                     accept="image/*"
-                                        className="mt-1 w-full text-sm"
-                    onChange={(e) =>
-                      setEditImage(e.target.files?.[0] ?? null)
-                    }
+                    className="mt-1 w-full text-sm"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setEditImage(file);
+                      setEditExtractMessage("");
+                      if (!file) return;
+                      setEditExtracting(true);
+                      try {
+                        const parsed = await extractFromImage(file);
+                        setEditForm((f) => ({
+                          ...f,
+                          cardNumber: parsed.cardNumber || f.cardNumber,
+                          pin: parsed.pin || f.pin,
+                          initialBalance:
+                            parsed.balance !== null
+                              ? parsed.balance.toFixed(2)
+                              : f.initialBalance,
+                        }));
+                        setEditExtractMessage(makeExtractMessage(parsed));
+                      } catch {
+                        setEditExtractMessage("Could not extract details from this image.");
+                      } finally {
+                        setEditExtracting(false);
+                      }
+                    }}
                   />
+                  <p className="mt-1 text-xs text-slate-500">
+                    {editExtracting ? "Extracting details..." : editExtractMessage}
+                  </p>
                 </label>
               ) : null}
               <button

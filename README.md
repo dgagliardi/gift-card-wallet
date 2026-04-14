@@ -13,6 +13,7 @@ Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/
 
 - Physical and digital cards, balances, transactions, archive, spending stats (same behavior as the original Sheets app).
 - **VPS:** [better-auth](https://www.better-auth.com/) with **Google OAuth** (recommended), optional email/password, Drizzle + SQLite, optional PWA. Digital card **photos** are stored on the server and shown in the list and detail views for checkout.
+- **Digital card OCR autofill:** on image upload, the app runs client-side OCR to best-effort extract card number, PIN, and starting balance from screenshots (fields remain editable).
 
 ---
 
@@ -75,6 +76,11 @@ gift-card-wallet/
 3. **First run:** open `/setup`. With Google configured, use **Continue with Google**; the **first** user to sign in becomes **admin**. Without Google keys, the setup form falls back to email/password (dev-only convenience).
 
 4. **Production:** `pnpm build` then `pnpm start` in `apps/web` (Node). Optional: Docker with `output: "standalone"` and a persistent volume for `data/`.
+
+### Notes on digital card image upload (mobile)
+
+- The file picker is configured to let mobile users choose from Photos, Files, or Camera (device determines chooser UI).
+- OCR extraction runs in-browser (client side) via `tesseract.js`; no OCR text processing is performed on the server.
 
 ---
 
