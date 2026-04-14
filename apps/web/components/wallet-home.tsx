@@ -1,6 +1,7 @@
 "use client";
 
 import type { WalletStats } from "@gift-card-wallet/domain";
+import { getLikelyBarcodeCropArea } from "@gift-card-wallet/domain";
 import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -82,6 +83,60 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       return parseGiftCardOcrText(text);
     } finally {
       await worker.terminate();
+    }
+  }
+
+  async function prepareBarcodeFocusedUpload(file: File): Promise<File> {
+    const srcUrl = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Image decode failed"));
+        el.src = srcUrl;
+      });
+
+      const maxWidth = 1600;
+      const scale = Math.min(1, maxWidth / img.width);
+      const normalizedWidth = Math.max(1, Math.floor(img.width * scale));
+      const normalizedHeight = Math.max(1, Math.floor(img.height * scale));
+
+      const normalizedCanvas = document.createElement("canvas");
+      normalizedCanvas.width = normalizedWidth;
+      normalizedCanvas.height = normalizedHeight;
+      const nctx = normalizedCanvas.getContext("2d");
+      if (!nctx) return file;
+      nctx.drawImage(img, 0, 0, normalizedWidth, normalizedHeight);
+
+      const crop = getLikelyBarcodeCropArea(normalizedWidth, normalizedHeight);
+      const barcodeCanvas = document.createElement("canvas");
+      barcodeCanvas.width = crop.width;
+      barcodeCanvas.height = crop.height;
+      const bctx = barcodeCanvas.getContext("2d");
+      if (!bctx) return file;
+      bctx.drawImage(
+        normalizedCanvas,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        crop.width,
+        crop.height,
+      );
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        barcodeCanvas.toBlob(resolve, "image/jpeg", 0.88);
+      });
+      if (!blob) return file;
+
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      return new File([blob], `${baseName}_barcode.jpg`, {
+        type: "image/jpeg",
+      });
+    } finally {
+      URL.revokeObjectURL(srcUrl);
     }
   }
 
@@ -319,16 +374,18 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                     accept="image/*"
                     className="mt-1 w-full text-sm"
                     onChange={async (e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setForm((f) => ({ ...f, image: file }));
+                      const originalFile = e.target.files?.[0] ?? null;
+                      setForm((f) => ({ ...f, image: originalFile }));
                       setAddExtractMessage("");
-                      if (!file) return;
+                      if (!originalFile) return;
                       setAddExtracting(true);
                       try {
-                        const parsed = await extractFromImage(file);
+                        const parsed = await extractFromImage(originalFile);
+                        const uploadFile =
+                          await prepareBarcodeFocusedUpload(originalFile);
                         setForm((f) => ({
                           ...f,
-                          image: file,
+                          image: uploadFile,
                           cardNumber: parsed.cardNumber || f.cardNumber,
                           pin: parsed.pin || f.pin,
                           initialBalance:
@@ -336,7 +393,9 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                               ? parsed.balance.toFixed(2)
                               : f.initialBalance,
                         }));
-                        setAddExtractMessage(makeExtractMessage(parsed));
+                        setAddExtractMessage(
+                          `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
+                        );
                       } catch {
                         setAddExtractMessage("Could not extract details from this image.");
                       } finally {
@@ -581,13 +640,16 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                     accept="image/*"
                     className="mt-1 w-full text-sm"
                     onChange={async (e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setEditImage(file);
+                      const originalFile = e.target.files?.[0] ?? null;
+                      setEditImage(originalFile);
                       setEditExtractMessage("");
-                      if (!file) return;
+                      if (!originalFile) return;
                       setEditExtracting(true);
                       try {
-                        const parsed = await extractFromImage(file);
+                        const parsed = await extractFromImage(originalFile);
+                        const uploadFile =
+                          await prepareBarcodeFocusedUpload(originalFile);
+                        setEditImage(uploadFile);
                         setEditForm((f) => ({
                           ...f,
                           cardNumber: parsed.cardNumber || f.cardNumber,
@@ -597,7 +659,9 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                               ? parsed.balance.toFixed(2)
                               : f.initialBalance,
                         }));
-                        setEditExtractMessage(makeExtractMessage(parsed));
+                        setEditExtractMessage(
+                          `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
+                        );
                       } catch {
                         setEditExtractMessage("Could not extract details from this image.");
                       } finally {

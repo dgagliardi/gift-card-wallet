@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@gift-card-wallet/domain"],
   serverExternalPackages: ["better-sqlite3"],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+  },
 };
 
 export default withPWA(nextConfig);
