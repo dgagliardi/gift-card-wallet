@@ -5,7 +5,7 @@ import { getLikelyBarcodeCropArea } from "@gift-card-wallet/domain";
 import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
 import { parseReceiptOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { AllTx, WalletCard } from "@/app/actions/wallet";
 import {
   addTransaction,
@@ -54,6 +54,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
   const [addExtractMessage, setAddExtractMessage] = useState("");
   const [addOriginalImage, setAddOriginalImage] = useState<File | null>(null);
   const [addCrop, setAddCrop] = useState<CropTuning>(DEFAULT_CROP);
+  const [addCropPreviewUrl, setAddCropPreviewUrl] = useState("");
 
   // Transaction history (all cards)
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -74,6 +75,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
   const [editExtractMessage, setEditExtractMessage] = useState("");
   const [editOriginalImage, setEditOriginalImage] = useState<File | null>(null);
   const [editCrop, setEditCrop] = useState<CropTuning>(DEFAULT_CROP);
+  const [editCropPreviewUrl, setEditCropPreviewUrl] = useState("");
   const [receiptScanning, setReceiptScanning] = useState(false);
   const [receiptMessage, setReceiptMessage] = useState("");
   const [lastReceiptSignature, setLastReceiptSignature] = useState("");
@@ -88,6 +90,26 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       router.refresh();
     });
   }
+
+  useEffect(() => {
+    if (!(form.image instanceof File)) {
+      setAddCropPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(form.image);
+    setAddCropPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.image]);
+
+  useEffect(() => {
+    if (!(editImage instanceof File)) {
+      setEditCropPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(editImage);
+    setEditCropPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [editImage]);
 
   async function extractTextFromImage(file: File): Promise<string> {
     const { createWorker } = await import("tesseract.js");
@@ -626,6 +648,19 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                           className="w-full"
                         />
                       </label>
+                      {addCropPreviewUrl ? (
+                        <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900/50">
+                          <p className="mb-1 text-[11px] text-slate-500">
+                            Saved barcode preview
+                          </p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={addCropPreviewUrl}
+                            alt=""
+                            className="max-h-28 w-full rounded object-contain bg-white dark:bg-slate-950"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </label>
@@ -937,6 +972,19 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                           className="w-full"
                         />
                       </label>
+                      {editCropPreviewUrl ? (
+                        <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900/50">
+                          <p className="mb-1 text-[11px] text-slate-500">
+                            Saved barcode preview
+                          </p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={editCropPreviewUrl}
+                            alt=""
+                            className="max-h-28 w-full rounded object-contain bg-white dark:bg-slate-950"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </label>
