@@ -132,8 +132,36 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     return parseGiftCardOcrText(await extractTextFromImage(file));
   }
 
-  async function extractReceiptFromImage(file: File) {
-    return parseReceiptOcrText(await extractTextFromImage(file));
+  /** Downscale huge phone photos so Tesseract gets stable text (mobile HEIC/JPEG). */
+  async function prepareImageForReceiptOcr(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) return file;
+    const srcUrl = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("decode"));
+        el.src = srcUrl;
+      });
+      const maxW = 2400;
+      if (img.width <= maxW) return file;
+      const scale = maxW / img.width;
+      const w = Math.max(1, Math.floor(img.width * scale));
+      const h = Math.max(1, Math.floor(img.height * scale));
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx) return file;
+      ctx.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.93));
+      if (!blob) return file;
+      return new File([blob], "receipt_ocr.jpg", { type: "image/jpeg" });
+    } catch {
+      return file;
+    } finally {
+      URL.revokeObjectURL(srcUrl);
+    }
   }
 
   function buildCropArea(
@@ -373,9 +401,19 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     setReceiptScanning(true);
     setReceiptMessage("");
     try {
-      const parsed = await extractReceiptFromImage(file);
+      const prepared = await prepareImageForReceiptOcr(file);
+      const rawText = await extractTextFromImage(prepared);
+      if (rawText.trim().length < 12) {
+        setReceiptMessage(
+          "Could not read receipt text. Try brighter light, hold steady, or move closer.",
+        );
+        return;
+      }
+      const parsed = parseReceiptOcrText(rawText);
       if (parsed.amount === null || parsed.amount <= 0) {
-        setReceiptMessage("Could not find a purchase amount on this receipt.");
+        setReceiptMessage(
+          "Could not find a purchase amount. Check photo focus; totals near the bottom work best.",
+        );
         return;
       }
 

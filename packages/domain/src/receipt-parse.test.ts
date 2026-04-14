@@ -62,4 +62,17 @@ describe("parseReceiptOcrText", () => {
     expect(r.summary).toContain("SUBTOTAL");
     expect(r.summary).toContain("TAX");
   });
+
+  it("infers total from pair-sum when keywords are garbled but amounts remain", () => {
+    const lines = [];
+    for (let i = 0; i < 8; i++) lines.push(`ITEM ${i} 12.99`);
+    lines.push("294.79");
+    lines.push("6.50");
+    lines.push("301.29");
+    const text = lines.join("\n");
+
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(301.29);
+    expect(r.summary).toContain("pair-sum");
+  });
 });
