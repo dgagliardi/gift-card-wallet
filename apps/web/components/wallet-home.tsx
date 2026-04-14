@@ -3,6 +3,7 @@
 import type { WalletStats } from "@gift-card-wallet/domain";
 import { getLikelyBarcodeCropArea } from "@gift-card-wallet/domain";
 import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
+import { parseReceiptOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { AllTx, WalletCard } from "@/app/actions/wallet";
@@ -22,6 +23,18 @@ type Props = {
   initialStats: WalletStats;
 };
 
+type CropTuning = {
+  yPct: number;
+  heightPct: number;
+  sidePadPct: number;
+};
+
+const DEFAULT_CROP: CropTuning = {
+  yPct: 55,
+  heightPct: 33,
+  sidePadPct: 8,
+};
+
 export function WalletHome({ initialCards, initialStats }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -39,6 +52,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
   });
   const [addExtracting, setAddExtracting] = useState(false);
   const [addExtractMessage, setAddExtractMessage] = useState("");
+  const [addOriginalImage, setAddOriginalImage] = useState<File | null>(null);
+  const [addCrop, setAddCrop] = useState<CropTuning>(DEFAULT_CROP);
 
   // Transaction history (all cards)
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -57,6 +72,11 @@ export function WalletHome({ initialCards, initialStats }: Props) {
   });
   const [editExtracting, setEditExtracting] = useState(false);
   const [editExtractMessage, setEditExtractMessage] = useState("");
+  const [editOriginalImage, setEditOriginalImage] = useState<File | null>(null);
+  const [editCrop, setEditCrop] = useState<CropTuning>(DEFAULT_CROP);
+  const [receiptScanning, setReceiptScanning] = useState(false);
+  const [receiptMessage, setReceiptMessage] = useState("");
+  const [lastReceiptSignature, setLastReceiptSignature] = useState("");
   const [txList, setTxList] = useState<
     Awaited<ReturnType<typeof getTransactions>>
   >([]);
@@ -69,24 +89,55 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     });
   }
 
-  async function extractFromImage(file: File): Promise<{
-    cardNumber: string;
-    pin: string;
-    balance: number | null;
-  }> {
+  async function extractTextFromImage(file: File): Promise<string> {
     const { createWorker } = await import("tesseract.js");
     const worker = await createWorker("eng");
     try {
       const {
         data: { text },
       } = await worker.recognize(file);
-      return parseGiftCardOcrText(text);
+      return text;
     } finally {
       await worker.terminate();
     }
   }
 
-  async function prepareBarcodeFocusedUpload(file: File): Promise<File> {
+  async function extractFromImage(file: File): Promise<{
+    cardNumber: string;
+    pin: string;
+    balance: number | null;
+  }> {
+    return parseGiftCardOcrText(await extractTextFromImage(file));
+  }
+
+  async function extractReceiptFromImage(file: File) {
+    return parseReceiptOcrText(await extractTextFromImage(file));
+  }
+
+  function buildCropArea(
+    width: number,
+    height: number,
+    tuning?: CropTuning,
+  ): { x: number; y: number; width: number; height: number } {
+    if (!tuning) return getLikelyBarcodeCropArea(width, height);
+    const sidePad = Math.floor(width * (tuning.sidePadPct / 100));
+    const x = Math.max(0, Math.min(sidePad, width - 1));
+    const cropWidth = Math.max(1, width - x * 2);
+    const y = Math.max(
+      0,
+      Math.min(Math.floor(height * (tuning.yPct / 100)), height - 1),
+    );
+    const cropHeight = Math.max(
+      1,
+      Math.min(Math.floor(height * (tuning.heightPct / 100)), height - y),
+    );
+    return { x, y, width: cropWidth, height: cropHeight };
+  }
+
+  async function prepareBarcodeFocusedUpload(
+    file: File,
+    tuning?: CropTuning,
+  ): Promise<File> {
     const srcUrl = URL.createObjectURL(file);
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -108,7 +159,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       if (!nctx) return file;
       nctx.drawImage(img, 0, 0, normalizedWidth, normalizedHeight);
 
-      const crop = getLikelyBarcodeCropArea(normalizedWidth, normalizedHeight);
+      const crop = buildCropArea(normalizedWidth, normalizedHeight, tuning);
       const barcodeCanvas = document.createElement("canvas");
       barcodeCanvas.width = crop.width;
       barcodeCanvas.height = crop.height;
@@ -154,6 +205,52 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       : "Could not detect card details from this image.";
   }
 
+  async function applyAddImageSelection(originalFile: File, crop: CropTuning) {
+    setAddExtracting(true);
+    try {
+      const parsed = await extractFromImage(originalFile);
+      const uploadFile = await prepareBarcodeFocusedUpload(originalFile, crop);
+      setForm((f) => ({
+        ...f,
+        image: uploadFile,
+        cardNumber: parsed.cardNumber || f.cardNumber,
+        pin: parsed.pin || f.pin,
+        initialBalance:
+          parsed.balance !== null ? parsed.balance.toFixed(2) : f.initialBalance,
+      }));
+      setAddExtractMessage(
+        `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
+      );
+    } catch {
+      setAddExtractMessage("Could not extract details from this image.");
+    } finally {
+      setAddExtracting(false);
+    }
+  }
+
+  async function applyEditImageSelection(originalFile: File, crop: CropTuning) {
+    setEditExtracting(true);
+    try {
+      const parsed = await extractFromImage(originalFile);
+      const uploadFile = await prepareBarcodeFocusedUpload(originalFile, crop);
+      setEditImage(uploadFile);
+      setEditForm((f) => ({
+        ...f,
+        cardNumber: parsed.cardNumber || f.cardNumber,
+        pin: parsed.pin || f.pin,
+        initialBalance:
+          parsed.balance !== null ? parsed.balance.toFixed(2) : f.initialBalance,
+      }));
+      setEditExtractMessage(
+        `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
+      );
+    } catch {
+      setEditExtractMessage("Could not extract details from this image.");
+    } finally {
+      setEditExtracting(false);
+    }
+  }
+
   async function openHistory() {
     const txs = await getAllTransactions();
     setAllTxList(txs);
@@ -164,7 +261,11 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     setDetailCard(c);
     setImgVisible(false);
     setEditImage(null);
+    setEditOriginalImage(null);
+    setEditCrop(DEFAULT_CROP);
     setEditExtractMessage("");
+    setReceiptMessage("");
+    setLastReceiptSignature("");
     setEditForm({
       brand: c.brand,
       initialBalance: String(c.initial),
@@ -192,6 +293,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       await saveCardFromForm(fd);
       setAddOpen(false);
       setAddExtractMessage("");
+      setAddOriginalImage(null);
       setForm({
         brand: "",
         type: "Physical",
@@ -223,6 +325,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         await updateCardImageFromForm(detailCard.id, fd);
       }
       setDetailCard(null);
+      setEditOriginalImage(null);
       setEditExtractMessage("");
       refresh();
     });
@@ -241,6 +344,67 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       setTxList(txs);
       refresh();
     });
+  }
+
+  async function autoCreateTransactionFromReceipt(file: File) {
+    if (!detailCard) return;
+    setReceiptScanning(true);
+    setReceiptMessage("");
+    try {
+      const parsed = await extractReceiptFromImage(file);
+      if (parsed.amount === null || parsed.amount <= 0) {
+        setReceiptMessage("Could not find a purchase amount on this receipt.");
+        return;
+      }
+
+      let finalAmount = parsed.amount;
+      if (
+        parsed.remainingBalance !== null &&
+        Number.isFinite(detailCard.current) &&
+        detailCard.current > parsed.remainingBalance
+      ) {
+        const implied = Number((detailCard.current - parsed.remainingBalance).toFixed(2));
+        if (implied > 0) {
+          finalAmount = implied;
+        }
+      }
+
+      const signature = [
+        detailCard.id,
+        finalAmount.toFixed(2),
+        parsed.merchant,
+        parsed.dateText,
+      ].join("|");
+      if (signature === lastReceiptSignature) {
+        setReceiptMessage("Duplicate receipt scan ignored.");
+        return;
+      }
+
+      const noteBits = ["[OCR receipt]"];
+      if (parsed.merchant) noteBits.push(parsed.merchant);
+      if (parsed.dateText) noteBits.push(parsed.dateText);
+      if (parsed.summary) noteBits.push(parsed.summary);
+      if (parsed.amount !== finalAmount) {
+        noteBits.push(
+          `reconciled amount ${finalAmount.toFixed(2)} (OCR total ${parsed.amount.toFixed(2)})`,
+        );
+      }
+      const note = noteBits.join(" | ").slice(0, 500);
+
+      await addTransaction(detailCard.id, finalAmount, note);
+      setLastReceiptSignature(signature);
+      setReceiptMessage(`Receipt added: $${finalAmount.toFixed(2)}`);
+      setDetailCard((d) =>
+        d ? { ...d, current: Math.max(0, d.current - finalAmount) } : d,
+      );
+      const txs = await getTransactions(detailCard.id);
+      setTxList(txs);
+      refresh();
+    } catch {
+      setReceiptMessage("Receipt scan failed. Try a clearer photo.");
+    } finally {
+      setReceiptScanning(false);
+    }
   }
 
   const totalAllTx = allTxList.reduce((s, t) => s + t.amount, 0);
@@ -283,6 +447,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         type="button"
         onClick={() => {
           setAddExtractMessage("");
+          setAddOriginalImage(null);
+          setAddCrop(DEFAULT_CROP);
           setAddOpen(true);
         }}
         disabled={pending}
@@ -375,32 +541,11 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                     className="mt-1 w-full text-sm"
                     onChange={async (e) => {
                       const originalFile = e.target.files?.[0] ?? null;
+                      setAddOriginalImage(originalFile);
                       setForm((f) => ({ ...f, image: originalFile }));
                       setAddExtractMessage("");
                       if (!originalFile) return;
-                      setAddExtracting(true);
-                      try {
-                        const parsed = await extractFromImage(originalFile);
-                        const uploadFile =
-                          await prepareBarcodeFocusedUpload(originalFile);
-                        setForm((f) => ({
-                          ...f,
-                          image: uploadFile,
-                          cardNumber: parsed.cardNumber || f.cardNumber,
-                          pin: parsed.pin || f.pin,
-                          initialBalance:
-                            parsed.balance !== null
-                              ? parsed.balance.toFixed(2)
-                              : f.initialBalance,
-                        }));
-                        setAddExtractMessage(
-                          `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
-                        );
-                      } catch {
-                        setAddExtractMessage("Could not extract details from this image.");
-                      } finally {
-                        setAddExtracting(false);
-                      }
+                      await applyAddImageSelection(originalFile, addCrop);
                     }}
                   />
                   <p className="mt-1 text-xs text-slate-500">
@@ -409,6 +554,80 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   <p className="mt-1 text-xs text-slate-500">
                     {addExtracting ? "Extracting details..." : addExtractMessage}
                   </p>
+                  {addOriginalImage ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-slate-500">Manual barcode crop</p>
+                      <label className="block text-[11px] text-slate-500">
+                        Vertical position ({addCrop.yPct}%)
+                        <input
+                          type="range"
+                          min={35}
+                          max={75}
+                          value={addCrop.yPct}
+                          onChange={async (ev) => {
+                            const next = { ...addCrop, yPct: Number(ev.target.value) };
+                            setAddCrop(next);
+                            if (addOriginalImage) {
+                              const upload = await prepareBarcodeFocusedUpload(
+                                addOriginalImage,
+                                next,
+                              );
+                              setForm((f) => ({ ...f, image: upload }));
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                      <label className="block text-[11px] text-slate-500">
+                        Crop height ({addCrop.heightPct}%)
+                        <input
+                          type="range"
+                          min={18}
+                          max={50}
+                          value={addCrop.heightPct}
+                          onChange={async (ev) => {
+                            const next = {
+                              ...addCrop,
+                              heightPct: Number(ev.target.value),
+                            };
+                            setAddCrop(next);
+                            if (addOriginalImage) {
+                              const upload = await prepareBarcodeFocusedUpload(
+                                addOriginalImage,
+                                next,
+                              );
+                              setForm((f) => ({ ...f, image: upload }));
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                      <label className="block text-[11px] text-slate-500">
+                        Side padding ({addCrop.sidePadPct}%)
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          value={addCrop.sidePadPct}
+                          onChange={async (ev) => {
+                            const next = {
+                              ...addCrop,
+                              sidePadPct: Number(ev.target.value),
+                            };
+                            setAddCrop(next);
+                            if (addOriginalImage) {
+                              const upload = await prepareBarcodeFocusedUpload(
+                                addOriginalImage,
+                                next,
+                              );
+                              setForm((f) => ({ ...f, image: upload }));
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </label>
               ) : null}
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -470,6 +689,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                   type="button"
                   onClick={() => {
                     setAddExtractMessage("");
+                    setAddOriginalImage(null);
                     setAddOpen(false);
                   }}
                   className="flex-1 rounded-lg border border-slate-300 py-2 text-sm dark:border-slate-600"
@@ -641,37 +861,84 @@ export function WalletHome({ initialCards, initialStats }: Props) {
                     className="mt-1 w-full text-sm"
                     onChange={async (e) => {
                       const originalFile = e.target.files?.[0] ?? null;
+                      setEditOriginalImage(originalFile);
                       setEditImage(originalFile);
                       setEditExtractMessage("");
                       if (!originalFile) return;
-                      setEditExtracting(true);
-                      try {
-                        const parsed = await extractFromImage(originalFile);
-                        const uploadFile =
-                          await prepareBarcodeFocusedUpload(originalFile);
-                        setEditImage(uploadFile);
-                        setEditForm((f) => ({
-                          ...f,
-                          cardNumber: parsed.cardNumber || f.cardNumber,
-                          pin: parsed.pin || f.pin,
-                          initialBalance:
-                            parsed.balance !== null
-                              ? parsed.balance.toFixed(2)
-                              : f.initialBalance,
-                        }));
-                        setEditExtractMessage(
-                          `${makeExtractMessage(parsed)} Saved image is cropped to barcode area.`,
-                        );
-                      } catch {
-                        setEditExtractMessage("Could not extract details from this image.");
-                      } finally {
-                        setEditExtracting(false);
-                      }
+                      await applyEditImageSelection(originalFile, editCrop);
                     }}
                   />
                   <p className="mt-1 text-xs text-slate-500">
                     {editExtracting ? "Extracting details..." : editExtractMessage}
                   </p>
+                  {editOriginalImage ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-slate-500">Manual barcode crop</p>
+                      <label className="block text-[11px] text-slate-500">
+                        Vertical position ({editCrop.yPct}%)
+                        <input
+                          type="range"
+                          min={35}
+                          max={75}
+                          value={editCrop.yPct}
+                          onChange={async (ev) => {
+                            const next = { ...editCrop, yPct: Number(ev.target.value) };
+                            setEditCrop(next);
+                            if (editOriginalImage) {
+                              setEditImage(
+                                await prepareBarcodeFocusedUpload(editOriginalImage, next),
+                              );
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                      <label className="block text-[11px] text-slate-500">
+                        Crop height ({editCrop.heightPct}%)
+                        <input
+                          type="range"
+                          min={18}
+                          max={50}
+                          value={editCrop.heightPct}
+                          onChange={async (ev) => {
+                            const next = {
+                              ...editCrop,
+                              heightPct: Number(ev.target.value),
+                            };
+                            setEditCrop(next);
+                            if (editOriginalImage) {
+                              setEditImage(
+                                await prepareBarcodeFocusedUpload(editOriginalImage, next),
+                              );
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                      <label className="block text-[11px] text-slate-500">
+                        Side padding ({editCrop.sidePadPct}%)
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          value={editCrop.sidePadPct}
+                          onChange={async (ev) => {
+                            const next = {
+                              ...editCrop,
+                              sidePadPct: Number(ev.target.value),
+                            };
+                            setEditCrop(next);
+                            if (editOriginalImage) {
+                              setEditImage(
+                                await prepareBarcodeFocusedUpload(editOriginalImage, next),
+                              );
+                            }
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </label>
               ) : null}
               <button
@@ -686,6 +953,24 @@ export function WalletHome({ initialCards, initialStats }: Props) {
             {/* Deduct */}
             <div className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-700">
               <h4 className="text-sm font-semibold">Deduct</h4>
+              <label className="mt-2 block cursor-pointer rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600 hover:border-teal-400 hover:text-teal-600 dark:border-slate-600 dark:text-slate-400">
+                {receiptScanning ? "Scanning receipt..." : "Scan receipt (auto add transaction)"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={receiptScanning || pending}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    await autoCreateTransactionFromReceipt(file);
+                  }}
+                />
+              </label>
+              {receiptMessage ? (
+                <p className="mt-1 text-xs text-slate-500">{receiptMessage}</p>
+              ) : null}
               <form onSubmit={submitTx} className="mt-2 flex flex-wrap gap-2">
                 <input
                   type="number"
