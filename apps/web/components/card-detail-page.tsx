@@ -415,17 +415,13 @@ export function CardDetailPage({
         );
       }
       const parsedDate = parseReceiptDateInputValue(parsed.dateText);
-      await addTransaction(
-        card.id,
-        finalAmount,
-        noteBits.join(" | ").slice(0, 500),
-        parsedDate ?? txDate,
-      );
+      const note = noteBits.join(" | ").slice(0, 500);
       setLastReceiptSignature(signature);
-      setReceiptMessage(`Receipt added: $${finalAmount.toFixed(2)}`);
-      setCard((c) => ({ ...c, current: Math.max(0, c.current - finalAmount) }));
-      setTxList(await getTransactions(card.id));
-      refresh();
+      setTxAmount(finalAmount.toFixed(2));
+      setTxNote(note);
+      if (parsedDate) setTxDate(parsedDate);
+      setReceiptMessage(`Receipt captured: $${finalAmount.toFixed(2)}. Review/edit then tap Add.`);
+      setActivityMessage("Receipt ready to review");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setReceiptMessage(msg ? `Receipt scan failed: ${msg.slice(0, 160)}` : "Receipt scan failed.");
@@ -655,7 +651,7 @@ export function CardDetailPage({
       <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
         <h3 className="text-sm font-semibold">Deduct</h3>
         <label className="mt-2 block cursor-pointer rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600 hover:border-teal-400 hover:text-teal-600 dark:border-slate-600 dark:text-slate-400">
-          {receiptScanning ? "Scanning receipt..." : "Scan receipt (auto add transaction)"}
+          {receiptScanning ? "Scanning receipt..." : "Scan receipt (prefill transaction)"}
           <input
             type="file"
             accept="image/*"
