@@ -446,39 +446,27 @@ export function CardDetailPage({
           Back to Home
         </button>
       </div>
-      {(isSavingCard ||
-        isSavingBarcodeImage ||
-        isAddingTransaction ||
-        receiptScanning ||
-        activityMessage) && (
-        <div className="flex flex-wrap gap-2">
-          {isSavingCard ? (
-            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-              Saving card...
-            </span>
-          ) : null}
-          {isSavingBarcodeImage ? (
-            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-              Updating barcode image...
-            </span>
-          ) : null}
-          {isAddingTransaction ? (
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-              Adding transaction...
-            </span>
-          ) : null}
-          {receiptScanning ? (
-            <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
-              Scanning receipt...
-            </span>
-          ) : null}
-          {activityMessage ? (
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-              {activityMessage}
-            </span>
-          ) : null}
-        </div>
-      )}
+      <div className="sticky top-[72px] z-20 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-950/95">
+        {isSavingCard ? (
+          <span className="font-medium text-sky-700 dark:text-sky-300">Saving card...</span>
+        ) : isSavingBarcodeImage ? (
+          <span className="font-medium text-indigo-700 dark:text-indigo-300">
+            Updating barcode image...
+          </span>
+        ) : isAddingTransaction ? (
+          <span className="font-medium text-amber-700 dark:text-amber-300">
+            Adding transaction...
+          </span>
+        ) : receiptScanning ? (
+          <span className="font-medium text-teal-700 dark:text-teal-300">Scanning receipt...</span>
+        ) : activityMessage ? (
+          <span className="font-medium text-emerald-700 dark:text-emerald-300">
+            {activityMessage}
+          </span>
+        ) : (
+          <span className="text-slate-500 dark:text-slate-400">Ready</span>
+        )}
+      </div>
 
       {card.imageUrl ? (
         <div>
