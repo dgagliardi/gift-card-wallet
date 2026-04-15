@@ -88,6 +88,18 @@ describe("parseReceiptOcrText", () => {
     expect(r.summary).toContain("SUBTOTAL");
   });
 
+  it("prefers higher nearby Costco footer total over low parsed amount", () => {
+    const text = `
+      COSTCO WHOLESALE
+      SUBTOTAL 259.69
+      TAX 4.50
+      **** TOTAL 264.64
+      TOTAL 264.19
+    `;
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(264.64);
+  });
+
   it("infers total from pair-sum when keywords are garbled but amounts remain", () => {
     const lines = [];
     for (let i = 0; i < 8; i++) lines.push(`ITEM ${i} 12.99`);

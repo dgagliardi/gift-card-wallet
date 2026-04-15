@@ -162,6 +162,20 @@ function isLikelyItemCountTotal(line: string, amount: number): boolean {
   );
 }
 
+function extractFooterTotalCandidates(lines: string[]): number[] {
+  const tail = lines.slice(Math.max(0, lines.length - 14));
+  const totals = tail.filter((l) => /\bTOTAL\b/i.test(l));
+  const vals: number[] = [];
+  for (const line of totals) {
+    const matches = line.match(/([0-9oOsSbB]{1,5}[.,][0-9oOsSbB]{2,3})/g) ?? [];
+    for (const token of matches) {
+      const v = parseMoney(token);
+      if (v !== null && v >= 1) vals.push(v);
+    }
+  }
+  return vals;
+}
+
 export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
   const lines = text
     .split(/\r?\n/)
@@ -219,6 +233,19 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
       if (currentLooksLikeCount || currentFarBelow || currentNearButOff) {
         amount = subTax.amount;
         summary = subTax.summary;
+      }
+    }
+  }
+  const looksCostco = /(COSTCO|WHOLESALE|PRE-SCANNED)/i.test(text);
+  if (looksCostco && amount !== null) {
+    const footerTotals = extractFooterTotalCandidates(lines);
+    if (footerTotals.length > 0) {
+      const bestFooter = Math.max(...footerTotals);
+      const delta = bestFooter - amount;
+      // Costco masked TOTAL is often misread slightly low; prefer nearby higher footer TOTAL.
+      if (delta >= 0.05 && delta <= 0.75) {
+        amount = bestFooter;
+        summary = `footer TOTAL ${bestFooter.toFixed(2)}`;
       }
     }
   }
