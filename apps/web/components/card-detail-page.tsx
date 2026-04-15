@@ -26,6 +26,29 @@ const DEFAULT_CROP: CropTuning = {
   sidePadPct: 8,
 };
 
+function toDateInputValue(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseReceiptDateInputValue(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const iso = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const mdy = t.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+  if (!mdy) return null;
+  const mm = Number(mdy[1]);
+  const dd = Number(mdy[2]);
+  let yy = Number(mdy[3]);
+  if (!Number.isFinite(mm) || !Number.isFinite(dd) || !Number.isFinite(yy)) return null;
+  if (yy < 100) yy += yy >= 70 ? 1900 : 2000;
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  return `${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
 export function CardDetailPage({
   initialCard,
   initialTx,
@@ -49,6 +72,7 @@ export function CardDetailPage({
   const [lastReceiptSignature, setLastReceiptSignature] = useState("");
   const [txAmount, setTxAmount] = useState("");
   const [txNote, setTxNote] = useState("");
+  const [txDate, setTxDate] = useState(() => toDateInputValue(new Date()));
   const [editForm, setEditForm] = useState({
     brand: initialCard.brand,
     initialBalance: String(initialCard.initial),
@@ -226,7 +250,7 @@ export function CardDetailPage({
     const amt = parseFloat(txAmount);
     if (!Number.isFinite(amt) || amt <= 0) return;
     startTransition(async () => {
-      await addTransaction(card.id, amt, txNote);
+      await addTransaction(card.id, amt, txNote, txDate);
       setTxAmount("");
       setTxNote("");
       setTxList(await getTransactions(card.id));
@@ -309,7 +333,13 @@ export function CardDetailPage({
           `reconciled amount ${finalAmount.toFixed(2)} (OCR total ${parsed.amount.toFixed(2)})`,
         );
       }
-      await addTransaction(card.id, finalAmount, noteBits.join(" | ").slice(0, 500));
+      const parsedDate = parseReceiptDateInputValue(parsed.dateText);
+      await addTransaction(
+        card.id,
+        finalAmount,
+        noteBits.join(" | ").slice(0, 500),
+        parsedDate ?? txDate,
+      );
       setLastReceiptSignature(signature);
       setReceiptMessage(`Receipt added: $${finalAmount.toFixed(2)}`);
       setCard((c) => ({ ...c, current: Math.max(0, c.current - finalAmount) }));
@@ -437,6 +467,12 @@ export function CardDetailPage({
         </label>
         {receiptMessage ? <p className="mt-1 text-xs text-slate-500">{receiptMessage}</p> : null}
         <form onSubmit={submitTx} className="mt-2 flex flex-wrap gap-2">
+          <input
+            type="date"
+            value={txDate}
+            onChange={(e) => setTxDate(e.target.value)}
+            className="w-full rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950"
+          />
           <input type="number" step="0.01" placeholder="Amount" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
           <input placeholder="Note" value={txNote} onChange={(e) => setTxNote(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
           <button type="submit" disabled={pending} className="w-full rounded bg-amber-600 py-1.5 text-sm text-white sm:w-auto">Add</button>

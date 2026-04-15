@@ -190,16 +190,40 @@ export async function updateCardDetails(input: {
   return getWalletPayload();
 }
 
-export async function addTransaction(cardId: string, amount: number, note: string) {
+function parseTransactionDateInput(input: string | undefined, fallback: Date): Date {
+  if (!input) return fallback;
+  const trimmed = input.trim();
+  const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    const y = Number(ymd[1]);
+    const m = Number(ymd[2]);
+    const d = Number(ymd[3]);
+    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
+      const dt = new Date(y, m - 1, d, 12, 0, 0, 0);
+      if (!Number.isNaN(dt.getTime())) return dt;
+    }
+  }
+  const dt = new Date(trimmed);
+  if (!Number.isNaN(dt.getTime())) return dt;
+  return fallback;
+}
+
+export async function addTransaction(
+  cardId: string,
+  amount: number,
+  note: string,
+  txDateInput?: string,
+) {
   const session = await requireSession();
   const uid = session.user.id;
   const now = new Date();
+  const txDate = parseTransactionDateInput(txDateInput, now);
 
   await db.insert(giftCardTransaction).values({
     id: newId(),
     userId: uid,
     cardId,
-    date: now,
+    date: txDate,
     amount,
     note: note ?? "",
     createdAt: now,
