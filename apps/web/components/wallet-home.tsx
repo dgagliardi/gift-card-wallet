@@ -308,26 +308,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     setHistoryOpen(true);
   }
 
-  async function openDetail(c: WalletCard) {
-    setDetailCard(c);
-    setImgVisible(false);
-    setEditImage(null);
-    setEditOriginalImage(null);
-    setEditCrop(DEFAULT_CROP);
-    setEditExtractMessage("");
-    setReceiptMessage("");
-    setLastReceiptSignature("");
-    setEditForm({
-      brand: c.brand,
-      initialBalance: String(c.initial),
-      cardNumber: c.cardNumber,
-      pin: c.pin,
-      balanceUrl: c.balanceUrl,
-    });
-    setTxAmount("");
-    setTxNote("");
-    const txs = await getTransactions(c.id);
-    setTxList(txs);
+  function openDetail(c: WalletCard) {
+    router.push(`/card/${c.id}`);
   }
 
   async function submitAdd(e: React.FormEvent) {
