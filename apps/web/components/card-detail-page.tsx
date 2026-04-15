@@ -181,7 +181,7 @@ export function CardDetailPage({
     const maxX = Math.max(0, (shownW - cropViewport.w) / 2);
     const maxY = Math.max(0, (shownH - cropViewport.h) / 2);
     return {
-      scale: clamp(next.scale, 1, 4),
+      scale: clamp(next.scale, 1, 10),
       x: clamp(next.x, -maxX, maxX),
       y: clamp(next.y, -maxY, maxY),
     };
@@ -430,7 +430,7 @@ export function CardDetailPage({
                 <input
                   type="range"
                   min={1}
-                  max={3}
+                  max={10}
                   step={0.1}
                   value={barcodeZoom}
                   onChange={(e) => setBarcodeZoom(Number(e.target.value))}
@@ -568,7 +568,7 @@ export function CardDetailPage({
                   <input
                     type="range"
                     min={1}
-                    max={4}
+                    max={10}
                     step={0.1}
                     value={gestureCrop.scale}
                     onChange={(e) =>
