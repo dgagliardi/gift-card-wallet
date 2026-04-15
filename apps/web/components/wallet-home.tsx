@@ -406,6 +406,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       const rawText = await extractTextFromImage(prepared);
       let parsed = parseReceiptOcrText(rawText);
       let usedVision = false;
+      let visionError = "";
 
       const needsVision =
         rawText.trim().length < 12 ||
@@ -419,15 +420,21 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         if (vision.ok) {
           parsed = parseReceiptOcrText(vision.text);
           usedVision = true;
+        } else {
+          visionError = vision.error;
         }
       }
 
       if (parsed.amount === null || parsed.amount <= 0) {
-        setReceiptMessage(
+        const hint =
           rawText.trim().length < 12 && !usedVision
             ? "Could not read receipt text. Try brighter light, hold steady, or move closer. With GOOGLE_VISION_API_KEY on the server, cloud OCR runs when local OCR fails."
-            : "Could not find a purchase amount. Check photo focus; totals near the bottom work best.",
-        );
+            : "Could not find a purchase amount. Check photo focus; totals near the bottom work best.";
+        const detail =
+          visionError && visionError.length > 0
+            ? ` Cloud OCR: ${visionError.slice(0, 180)}`
+            : "";
+        setReceiptMessage(`${hint}${detail}`);
         return;
       }
 
@@ -474,8 +481,13 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       const txs = await getTransactions(detailCard.id);
       setTxList(txs);
       refresh();
-    } catch {
-      setReceiptMessage("Receipt scan failed. Try a clearer photo.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setReceiptMessage(
+        msg
+          ? `Receipt scan failed: ${msg.slice(0, 160)}`
+          : "Receipt scan failed. Try a clearer photo.",
+      );
     } finally {
       setReceiptScanning(false);
     }

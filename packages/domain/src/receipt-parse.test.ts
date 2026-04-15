@@ -75,4 +75,22 @@ describe("parseReceiptOcrText", () => {
     expect(r.amount).toBe(301.29);
     expect(r.summary).toContain("pair-sum");
   });
+
+  it("uses a lone final amount line when subtotal/tax cues are missing", () => {
+    const text = `
+      COSTCO WHOLESALE
+      STORE 0123
+      REGISTER 7
+      100.00
+    `;
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(100);
+    expect(r.summary).toContain("trailing");
+  });
+
+  it("matches TOTAL DUE with amount", () => {
+    const text = "COSTCO\nTOTAL DUE 88.12\nTHANK YOU";
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(88.12);
+  });
 });

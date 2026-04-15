@@ -113,12 +113,39 @@ function extractAmountNearKeyword(text: string): { amount: number; summary: stri
     /\*{0,4}\s*TOTAL[^\d]{0,40}([0-9][0-9]{1,4}[.,][0-9]{2,4})/i,
     /(?:AMOUNT|BALANCE)\s*DUE[^\d]{0,40}([0-9][0-9]{1,4}[.,][0-9]{2,4})/i,
     /GRAND\s*TOTAL[^\d]{0,40}([0-9][0-9]{1,4}[.,][0-9]{2,4})/i,
+    /\bTOTAL\s*(?:DUE|SALE|CHARGE)\b[^\d]{0,40}([0-9][0-9]{1,4}[.,][0-9]{2,4})/i,
   ];
   for (const re of patterns) {
     const m = flat.match(re);
     if (m?.[1]) {
       const v = parseMoney(m[1]);
       if (v !== null && v >= 1) return { amount: v, summary: m[0].slice(0, 100) };
+    }
+  }
+  return null;
+}
+
+/**
+ * Many receipts end with a lone total line (Vision / mobile OCR often preserves this).
+ * Only when the body looks like a real receipt to avoid matching stray prices.
+ */
+function extractTrailingTotalLine(text: string): { amount: number; summary: string } | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length < 4) return null;
+  const receiptLike =
+    /(COSTCO|TOTAL|SUB|TAX|WHOLESALE|CHECKOUT|SCANNED|RECEIPT|HST|GST|PST)/i.test(
+      text,
+    ) || text.length > 400;
+  if (!receiptLike) return null;
+  for (const line of [...lines].reverse().slice(0, 4)) {
+    const m = line.match(/^\$?\s*([0-9]{1,5}[.,][0-9]{2})\s*$/);
+    if (!m?.[1]) continue;
+    const v = parseMoney(m[1]);
+    if (v !== null && v >= 5) {
+      return { amount: v, summary: `trailing ${line}` };
     }
   }
   return null;
@@ -189,6 +216,13 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
     if (triple) {
       amount = triple.amount;
       summary = triple.summary;
+    }
+  }
+  if (amount === null) {
+    const trail = extractTrailingTotalLine(text);
+    if (trail) {
+      amount = trail.amount;
+      summary = trail.summary;
     }
   }
 
