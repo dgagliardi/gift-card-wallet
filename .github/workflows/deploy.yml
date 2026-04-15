@@ -32,6 +32,9 @@ jobs:
             npm_config_python=/usr/bin/python3.8 \
             pnpm install
 
+            echo "==> Cleaning previous Next build artifacts..."
+            rm -rf apps/web/.next
+
             echo "==> Building..."
             pnpm build
 
