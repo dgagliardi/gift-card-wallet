@@ -211,7 +211,12 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
         ? isLikelyItemCountTotal(best.line, amount)
         : false;
       const currentFarBelow = amount + 0.5 < subTax.amount;
-      if (currentLooksLikeCount || currentFarBelow) {
+      const currentNearButOff =
+        best !== undefined &&
+        /TOTAL|\*{2,}/i.test(best.line) &&
+        Math.abs(amount - subTax.amount) >= 0.5 &&
+        Math.abs(amount - subTax.amount) <= 8;
+      if (currentLooksLikeCount || currentFarBelow || currentNearButOff) {
         amount = subTax.amount;
         summary = subTax.summary;
       }
