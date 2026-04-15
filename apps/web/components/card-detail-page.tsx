@@ -1,8 +1,8 @@
 "use client";
 
-import { getLikelyBarcodeCropArea, parseGiftCardOcrText, parseReceiptOcrText } from "@gift-card-wallet/domain";
+import { parseGiftCardOcrText, parseReceiptOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { WalletCard, WalletTx } from "@/app/actions/wallet";
 import {
   addTransaction,
@@ -14,17 +14,8 @@ import {
 } from "@/app/actions/wallet";
 import { extractReceiptTextWithGoogleVision } from "@/app/actions/receipt-vision";
 
-type CropTuning = {
-  yPct: number;
-  heightPct: number;
-  sidePadPct: number;
-};
-
-const DEFAULT_CROP: CropTuning = {
-  yPct: 55,
-  heightPct: 33,
-  sidePadPct: 8,
-};
+type GestureCrop = { scale: number; x: number; y: number };
+type SourceDims = { w: number; h: number };
 
 function toDateInputValue(d: Date): string {
   const y = d.getFullYear();
@@ -49,6 +40,17 @@ function parseReceiptDateInputValue(raw: string): string | null {
   return `${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
 }
 
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+function touchDistance(
+  a: { clientX: number; clientY: number },
+  b: { clientX: number; clientY: number },
+): number {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
 export function CardDetailPage({
   initialCard,
   initialTx,
@@ -61,10 +63,33 @@ export function CardDetailPage({
   const [card, setCard] = useState(initialCard);
   const [txList, setTxList] = useState(initialTx);
   const [imgVisible, setImgVisible] = useState(false);
-  const [editImage, setEditImage] = useState<File | null>(null);
   const [editOriginalImage, setEditOriginalImage] = useState<File | null>(null);
-  const [editCrop, setEditCrop] = useState<CropTuning>(DEFAULT_CROP);
   const [editCropPreviewUrl, setEditCropPreviewUrl] = useState("");
+  const [sourceDims, setSourceDims] = useState<SourceDims | null>(null);
+  const [gestureCrop, setGestureCrop] = useState<GestureCrop>({ scale: 1.4, x: 0, y: 0 });
+  const cropRef = useRef<HTMLDivElement | null>(null);
+  const [cropViewport, setCropViewport] = useState({ w: 320, h: 150 });
+  const touchRef = useRef<{
+    mode: "none" | "pan" | "pinch";
+    startX: number;
+    startY: number;
+    startCropX: number;
+    startCropY: number;
+    startScale: number;
+    startDistance: number;
+    startMidX: number;
+    startMidY: number;
+  }>({
+    mode: "none",
+    startX: 0,
+    startY: 0,
+    startCropX: 0,
+    startCropY: 0,
+    startScale: 1.4,
+    startDistance: 0,
+    startMidX: 0,
+    startMidY: 0,
+  });
   const [editExtracting, setEditExtracting] = useState(false);
   const [editExtractMessage, setEditExtractMessage] = useState("");
   const [receiptScanning, setReceiptScanning] = useState(false);
@@ -83,14 +108,26 @@ export function CardDetailPage({
   });
 
   useEffect(() => {
-    if (!(editImage instanceof File)) {
+    if (!(editOriginalImage instanceof File)) {
       setEditCropPreviewUrl("");
       return;
     }
-    const url = URL.createObjectURL(editImage);
+    const url = URL.createObjectURL(editOriginalImage);
     setEditCropPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [editImage]);
+  }, [editOriginalImage]);
+
+  useEffect(() => {
+    const el = cropRef.current;
+    if (!el) return;
+    const update = () => {
+      setCropViewport({ w: el.clientWidth, h: el.clientHeight });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   async function extractTextFromImage(file: File): Promise<string> {
     const { createWorker } = await import("tesseract.js");
@@ -136,24 +173,55 @@ export function CardDetailPage({
     }
   }
 
-  function buildCropArea(
-    width: number,
-    height: number,
-    tuning?: CropTuning,
-  ): { x: number; y: number; width: number; height: number } {
-    if (!tuning) return getLikelyBarcodeCropArea(width, height);
-    const sidePad = Math.floor(width * (tuning.sidePadPct / 100));
-    const x = Math.max(0, Math.min(sidePad, width - 1));
-    const cropWidth = Math.max(1, width - x * 2);
-    const y = Math.max(0, Math.min(Math.floor(height * (tuning.yPct / 100)), height - 1));
-    const cropHeight = Math.max(
-      1,
-      Math.min(Math.floor(height * (tuning.heightPct / 100)), height - y),
-    );
-    return { x, y, width: cropWidth, height: cropHeight };
+  function clampGesture(next: GestureCrop): GestureCrop {
+    if (!sourceDims) return next;
+    const fit = Math.min(cropViewport.w / sourceDims.w, cropViewport.h / sourceDims.h);
+    const shownW = sourceDims.w * fit * next.scale;
+    const shownH = sourceDims.h * fit * next.scale;
+    const maxX = Math.max(0, (shownW - cropViewport.w) / 2);
+    const maxY = Math.max(0, (shownH - cropViewport.h) / 2);
+    return {
+      scale: clamp(next.scale, 1, 4),
+      x: clamp(next.x, -maxX, maxX),
+      y: clamp(next.y, -maxY, maxY),
+    };
   }
 
-  async function prepareBarcodeFocusedUpload(file: File, tuning?: CropTuning): Promise<File> {
+  async function handleEditImageSelection(originalFile: File) {
+    setEditExtracting(true);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const u = URL.createObjectURL(originalFile);
+        const el = new Image();
+        el.onload = () => {
+          URL.revokeObjectURL(u);
+          resolve(el);
+        };
+        el.onerror = () => {
+          URL.revokeObjectURL(u);
+          reject(new Error("Image decode failed"));
+        };
+        el.src = u;
+      });
+      setSourceDims({ w: img.naturalWidth || img.width, h: img.naturalHeight || img.height });
+      setGestureCrop({ scale: 1.4, x: 0, y: 0 });
+      const parsed = parseGiftCardOcrText(await extractTextFromImage(originalFile));
+      setEditForm((f) => ({
+        ...f,
+        cardNumber: parsed.cardNumber || f.cardNumber,
+        pin: parsed.pin || f.pin,
+        initialBalance: parsed.balance !== null ? parsed.balance.toFixed(2) : f.initialBalance,
+      }));
+      setEditExtractMessage("Use drag/pinch to frame barcode. Saved on Save card.");
+    } catch {
+      setEditExtractMessage("Could not extract details from this image.");
+    } finally {
+      setEditExtracting(false);
+    }
+  }
+
+  async function buildGestureCroppedUpload(file: File): Promise<File> {
+    if (!sourceDims || cropViewport.w < 10 || cropViewport.h < 10) return file;
     const srcUrl = URL.createObjectURL(file);
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -162,61 +230,35 @@ export function CardDetailPage({
         el.onerror = () => reject(new Error("Image decode failed"));
         el.src = srcUrl;
       });
-      const maxWidth = 1600;
-      const scale = Math.min(1, maxWidth / img.width);
-      const normalizedWidth = Math.max(1, Math.floor(img.width * scale));
-      const normalizedHeight = Math.max(1, Math.floor(img.height * scale));
-      const normalizedCanvas = document.createElement("canvas");
-      normalizedCanvas.width = normalizedWidth;
-      normalizedCanvas.height = normalizedHeight;
-      const nctx = normalizedCanvas.getContext("2d");
-      if (!nctx) return file;
-      nctx.drawImage(img, 0, 0, normalizedWidth, normalizedHeight);
-      const crop = buildCropArea(normalizedWidth, normalizedHeight, tuning);
-      const barcodeCanvas = document.createElement("canvas");
-      barcodeCanvas.width = crop.width;
-      barcodeCanvas.height = crop.height;
-      const bctx = barcodeCanvas.getContext("2d");
-      if (!bctx) return file;
-      bctx.drawImage(
-        normalizedCanvas,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        crop.width,
-        crop.height,
-      );
-      const blob = await new Promise<Blob | null>((resolve) => {
-        barcodeCanvas.toBlob(resolve, "image/jpeg", 0.88);
-      });
+
+      const outW = 1600;
+      const outH = 500;
+      const c = document.createElement("canvas");
+      c.width = outW;
+      c.height = outH;
+      const ctx = c.getContext("2d");
+      if (!ctx) return file;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, outW, outH);
+
+      const fit = Math.min(cropViewport.w / sourceDims.w, cropViewport.h / sourceDims.h);
+      const shownW = sourceDims.w * fit * gestureCrop.scale;
+      const shownH = sourceDims.h * fit * gestureCrop.scale;
+      const scaleX = outW / cropViewport.w;
+      const scaleY = outH / cropViewport.h;
+
+      const drawW = shownW * scaleX;
+      const drawH = shownH * scaleY;
+      const drawX = (outW - drawW) / 2 + gestureCrop.x * scaleX;
+      const drawY = (outH - drawH) / 2 + gestureCrop.y * scaleY;
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.9));
       if (!blob) return file;
       const baseName = file.name.replace(/\.[^.]+$/, "");
       return new File([blob], `${baseName}_barcode.jpg`, { type: "image/jpeg" });
     } finally {
       URL.revokeObjectURL(srcUrl);
-    }
-  }
-
-  async function applyEditImageSelection(originalFile: File, crop: CropTuning) {
-    setEditExtracting(true);
-    try {
-      const parsed = parseGiftCardOcrText(await extractTextFromImage(originalFile));
-      const uploadFile = await prepareBarcodeFocusedUpload(originalFile, crop);
-      setEditImage(uploadFile);
-      setEditForm((f) => ({
-        ...f,
-        cardNumber: parsed.cardNumber || f.cardNumber,
-        pin: parsed.pin || f.pin,
-        initialBalance: parsed.balance !== null ? parsed.balance.toFixed(2) : f.initialBalance,
-      }));
-      setEditExtractMessage("Detected card details. Saved image is cropped to barcode area.");
-    } catch {
-      setEditExtractMessage("Could not extract details from this image.");
-    } finally {
-      setEditExtracting(false);
     }
   }
 
@@ -237,9 +279,9 @@ export function CardDetailPage({
         pin: editForm.pin,
         balanceUrl: editForm.balanceUrl,
       });
-      if (editImage && card.type === "Digital") {
+      if (editOriginalImage && card.type === "Digital") {
         const fd = new FormData();
-        fd.set("image", editImage);
+        fd.set("image", await buildGestureCroppedUpload(editOriginalImage));
         await updateCardImageFromForm(card.id, fd);
       }
       refresh();
@@ -435,30 +477,111 @@ export function CardDetailPage({
               onChange={async (e) => {
                 const originalFile = e.target.files?.[0] ?? null;
                 setEditOriginalImage(originalFile);
-                setEditImage(originalFile);
                 setEditExtractMessage("");
-                if (!originalFile) return;
-                await applyEditImageSelection(originalFile, editCrop);
+                if (!originalFile) {
+                  setSourceDims(null);
+                  return;
+                }
+                await handleEditImageSelection(originalFile);
               }}
             />
             <p className="mt-1 text-xs text-slate-500">{editExtracting ? "Extracting details..." : editExtractMessage}</p>
             {editOriginalImage ? (
-              <div className="mt-2 space-y-1">
+              <div className="mt-2 space-y-2">
+                <div
+                  ref={cropRef}
+                  className="relative h-36 w-full touch-none overflow-hidden rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60"
+                  onTouchStart={(e) => {
+                    if (e.touches.length === 1) {
+                      const t = e.touches[0]!;
+                      touchRef.current = {
+                        ...touchRef.current,
+                        mode: "pan",
+                        startX: t.clientX,
+                        startY: t.clientY,
+                        startCropX: gestureCrop.x,
+                        startCropY: gestureCrop.y,
+                      };
+                    } else if (e.touches.length >= 2) {
+                      const t0 = e.touches[0]!;
+                      const t1 = e.touches[1]!;
+                      touchRef.current = {
+                        ...touchRef.current,
+                        mode: "pinch",
+                        startDistance: touchDistance(t0, t1),
+                        startScale: gestureCrop.scale,
+                        startCropX: gestureCrop.x,
+                        startCropY: gestureCrop.y,
+                        startMidX: (t0.clientX + t1.clientX) / 2,
+                        startMidY: (t0.clientY + t1.clientY) / 2,
+                      };
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    e.preventDefault();
+                    const st = touchRef.current;
+                    if (st.mode === "pan" && e.touches.length === 1) {
+                      const t = e.touches[0]!;
+                      const next = clampGesture({
+                        ...gestureCrop,
+                        x: st.startCropX + (t.clientX - st.startX),
+                        y: st.startCropY + (t.clientY - st.startY),
+                      });
+                      setGestureCrop(next);
+                    } else if (st.mode === "pinch" && e.touches.length >= 2) {
+                      const t0 = e.touches[0]!;
+                      const t1 = e.touches[1]!;
+                      const dist = touchDistance(t0, t1);
+                      const midX = (t0.clientX + t1.clientX) / 2;
+                      const midY = (t0.clientY + t1.clientY) / 2;
+                      const next = clampGesture({
+                        scale: st.startScale * (dist / Math.max(1, st.startDistance)),
+                        x: st.startCropX + (midX - st.startMidX),
+                        y: st.startCropY + (midY - st.startMidY),
+                      });
+                      setGestureCrop(next);
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    touchRef.current.mode = "none";
+                  }}
+                >
+                  {editCropPreviewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={editCropPreviewUrl}
+                      alt=""
+                      style={{
+                        transform: `translate(${gestureCrop.x}px, ${gestureCrop.y}px) scale(${gestureCrop.scale})`,
+                        transformOrigin: "center center",
+                      }}
+                      className="h-full w-full object-contain transition-transform duration-75"
+                    />
+                  ) : null}
+                  <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-teal-400/70" />
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Drag with one finger to move. Pinch with two fingers to zoom. Saved when you tap Save card.
+                </p>
                 <label className="block text-[11px] text-slate-500">
-                  Vertical position ({editCrop.yPct}%)
-                  <input type="range" min={35} max={75} value={editCrop.yPct} onChange={async (ev) => { const next = { ...editCrop, yPct: Number(ev.target.value) }; setEditCrop(next); if (editOriginalImage) setEditImage(await prepareBarcodeFocusedUpload(editOriginalImage, next)); }} className="w-full" />
-                </label>
-                <label className="block text-[11px] text-slate-500">
-                  Crop height ({editCrop.heightPct}%)
-                  <input type="range" min={18} max={50} value={editCrop.heightPct} onChange={async (ev) => { const next = { ...editCrop, heightPct: Number(ev.target.value) }; setEditCrop(next); if (editOriginalImage) setEditImage(await prepareBarcodeFocusedUpload(editOriginalImage, next)); }} className="w-full" />
-                </label>
-                <label className="block text-[11px] text-slate-500">
-                  Side padding ({editCrop.sidePadPct}%)
-                  <input type="range" min={0} max={20} value={editCrop.sidePadPct} onChange={async (ev) => { const next = { ...editCrop, sidePadPct: Number(ev.target.value) }; setEditCrop(next); if (editOriginalImage) setEditImage(await prepareBarcodeFocusedUpload(editOriginalImage, next)); }} className="w-full" />
+                  Zoom ({gestureCrop.scale.toFixed(1)}x)
+                  <input
+                    type="range"
+                    min={1}
+                    max={4}
+                    step={0.1}
+                    value={gestureCrop.scale}
+                    onChange={(e) =>
+                      setGestureCrop((prev) =>
+                        clampGesture({ ...prev, scale: Number(e.target.value) }),
+                      )
+                    }
+                    className="w-full"
+                  />
                 </label>
                 {editCropPreviewUrl ? (
                   <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900/50">
-                    <p className="mb-1 text-[11px] text-slate-500">Saved barcode preview</p>
+                    <p className="mb-1 text-[11px] text-slate-500">Source image</p>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={editCropPreviewUrl} alt="" className="max-h-28 w-full rounded object-contain bg-white dark:bg-slate-950" />
                   </div>
