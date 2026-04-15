@@ -99,6 +99,10 @@ export function CardDetailPage({
   const [txNote, setTxNote] = useState("");
   const [txDate, setTxDate] = useState(() => toDateInputValue(new Date()));
   const [barcodeZoom, setBarcodeZoom] = useState(1.6);
+  const [isSavingCard, setIsSavingCard] = useState(false);
+  const [isSavingBarcodeImage, setIsSavingBarcodeImage] = useState(false);
+  const [isAddingTransaction, setIsAddingTransaction] = useState(false);
+  const [activityMessage, setActivityMessage] = useState("");
   const [editForm, setEditForm] = useState({
     brand: initialCard.brand,
     initialBalance: String(initialCard.initial),
@@ -128,6 +132,12 @@ export function CardDetailPage({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!activityMessage) return;
+    const timer = setTimeout(() => setActivityMessage(""), 3500);
+    return () => clearTimeout(timer);
+  }, [activityMessage]);
 
   async function extractTextFromImage(file: File): Promise<string> {
     const { createWorker } = await import("tesseract.js");
@@ -270,19 +280,40 @@ export function CardDetailPage({
 
   async function submitEdit(e: React.FormEvent) {
     e.preventDefault();
+    setActivityMessage("");
+    setIsSavingCard(true);
     startTransition(async () => {
-      await updateCardDetails({
-        cardId: card.id,
-        brand: editForm.brand,
-        initialBalance: parseFloat(editForm.initialBalance) || 0,
-        cardNumber: editForm.cardNumber,
-        pin: editForm.pin,
-        balanceUrl: editForm.balanceUrl,
-      });
-      if (editOriginalImage && card.type === "Digital") {
-        const fd = new FormData();
-        fd.set("image", await buildGestureCroppedUpload(editOriginalImage));
-        await updateCardImageFromForm(card.id, fd);
+      try {
+        await updateCardDetails({
+          cardId: card.id,
+          brand: editForm.brand,
+          initialBalance: parseFloat(editForm.initialBalance) || 0,
+          cardNumber: editForm.cardNumber,
+          pin: editForm.pin,
+          balanceUrl: editForm.balanceUrl,
+        });
+        if (editOriginalImage && card.type === "Digital") {
+          setIsSavingBarcodeImage(true);
+          const fd = new FormData();
+          fd.set("image", await buildGestureCroppedUpload(editOriginalImage));
+          await updateCardImageFromForm(card.id, fd);
+          setEditOriginalImage(null);
+        }
+        setCard((prev) => ({
+          ...prev,
+          brand: editForm.brand,
+          initial: parseFloat(editForm.initialBalance) || 0,
+          cardNumber: editForm.cardNumber,
+          pin: editForm.pin,
+          balanceUrl: editForm.balanceUrl,
+        }));
+        setActivityMessage("Card saved");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setActivityMessage(msg ? `Save failed: ${msg.slice(0, 120)}` : "Save failed");
+      } finally {
+        setIsSavingBarcodeImage(false);
+        setIsSavingCard(false);
       }
       refresh();
     });
@@ -292,12 +323,19 @@ export function CardDetailPage({
     e.preventDefault();
     const amt = parseFloat(txAmount);
     if (!Number.isFinite(amt) || amt <= 0) return;
+    setIsAddingTransaction(true);
+    setActivityMessage("");
     startTransition(async () => {
-      await addTransaction(card.id, amt, txNote, txDate);
-      setTxAmount("");
-      setTxNote("");
-      setTxList(await getTransactions(card.id));
-      setCard((c) => ({ ...c, current: Math.max(0, c.current - amt) }));
+      try {
+        await addTransaction(card.id, amt, txNote, txDate);
+        setTxAmount("");
+        setTxNote("");
+        setTxList(await getTransactions(card.id));
+        setCard((c) => ({ ...c, current: Math.max(0, c.current - amt) }));
+        setActivityMessage("Transaction added");
+      } finally {
+        setIsAddingTransaction(false);
+      }
       refresh();
     });
   }
@@ -408,6 +446,39 @@ export function CardDetailPage({
           Back to Home
         </button>
       </div>
+      {(isSavingCard ||
+        isSavingBarcodeImage ||
+        isAddingTransaction ||
+        receiptScanning ||
+        activityMessage) && (
+        <div className="flex flex-wrap gap-2">
+          {isSavingCard ? (
+            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+              Saving card...
+            </span>
+          ) : null}
+          {isSavingBarcodeImage ? (
+            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+              Updating barcode image...
+            </span>
+          ) : null}
+          {isAddingTransaction ? (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              Adding transaction...
+            </span>
+          ) : null}
+          {receiptScanning ? (
+            <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+              Scanning receipt...
+            </span>
+          ) : null}
+          {activityMessage ? (
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              {activityMessage}
+            </span>
+          ) : null}
+        </div>
+      )}
 
       {card.imageUrl ? (
         <div>
