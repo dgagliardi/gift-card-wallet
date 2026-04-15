@@ -445,7 +445,10 @@ export function WalletHome({ initialCards, initialStats }: Props) {
         detailCard.current > parsed.remainingBalance
       ) {
         const implied = Number((detailCard.current - parsed.remainingBalance).toFixed(2));
-        if (implied > 0) {
+        // Only trust remaining-balance reconciliation when it is consistent with OCR total.
+        const sumMatches =
+          Math.abs(parsed.remainingBalance + parsed.amount - detailCard.current) <= 1.5;
+        if (implied > 0 && implied <= detailCard.current && sumMatches) {
           finalAmount = implied;
         }
       }
@@ -859,13 +862,22 @@ export function WalletHome({ initialCards, initialStats }: Props) {
               <h3 className="text-lg font-semibold text-teal-600 dark:text-teal-400">
                 {detailCard.brand}
               </h3>
-              <button
-                type="button"
-                className="text-sm text-slate-500"
-                onClick={() => setDetailCard(null)}
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-teal-600 dark:text-teal-400"
+                  onClick={() => setDetailCard(null)}
+                >
+                  Home
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-slate-500"
+                  onClick={() => setDetailCard(null)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             {/* Barcode image — tap to reveal */}
