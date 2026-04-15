@@ -10,7 +10,6 @@ import type { AllTx, WalletCard } from "@/app/actions/wallet";
 import {
   addTransaction,
   deleteTransaction,
-  getAllTransactions,
   getTransactions,
   saveCardFromForm,
   toggleArchive,
@@ -59,7 +58,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
 
   // Transaction history (all cards)
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [allTxList, setAllTxList] = useState<AllTx[]>([]);
+  const [allTxList] = useState<AllTx[]>([]);
 
   // Card detail
   const [detailCard, setDetailCard] = useState<WalletCard | null>(null);
@@ -302,12 +301,6 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     }
   }
 
-  async function openHistory() {
-    const txs = await getAllTransactions();
-    setAllTxList(txs);
-    setHistoryOpen(true);
-  }
-
   function openDetail(c: WalletCard) {
     router.push(`/card/${c.id}`);
   }
@@ -510,7 +503,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
           </h2>
           <button
             type="button"
-            onClick={openHistory}
+            onClick={() => router.push("/transactions")}
             className="text-xs font-medium text-teal-600 hover:text-teal-500 dark:text-teal-400"
           >
             Transaction History →
@@ -535,12 +528,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       {/* Add card */}
       <button
         type="button"
-        onClick={() => {
-          setAddExtractMessage("");
-          setAddOriginalImage(null);
-          setAddCrop(DEFAULT_CROP);
-          setAddOpen(true);
-        }}
+        onClick={() => router.push("/add-card")}
         disabled={pending}
         className="w-full rounded-lg bg-teal-600 py-3 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-60"
       >
