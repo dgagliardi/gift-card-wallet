@@ -63,17 +63,6 @@ export function WalletHomePage({ initialCards, initialStats }: Props) {
                 : "bg-linear-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]"
             } ${c.archived ? "opacity-60 grayscale-[0.3]" : ""}`}
           >
-            {c.imageUrl ? (
-              <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black/20">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.imageUrl} alt="" className="h-full w-full object-cover blur-sm" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[10px] font-semibold text-white/90 drop-shadow">
-                    Tap to view
-                  </span>
-                </div>
-              </div>
-            ) : null}
             <div className="min-w-0 flex-1">
               <div className="flex justify-between gap-2">
                 <span className="truncate text-lg font-extrabold uppercase tracking-wide">
