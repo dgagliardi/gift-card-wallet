@@ -5,6 +5,8 @@ import { getSession } from "@/lib/session";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoginForm } from "./ui";
 
+const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+
 export default async function LoginPage() {
   const session = await getSession();
   if (session) redirect("/");
@@ -70,6 +72,9 @@ export default async function LoginPage() {
         />
         <p className="mt-4 text-center text-xs text-slate-500">
           First time? Complete setup if this is a new install.
+        </p>
+        <p className="mt-2 text-center text-[11px] text-slate-400">
+          Version {appVersion}
         </p>
       </div>
     </div>
