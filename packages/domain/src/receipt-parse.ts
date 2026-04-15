@@ -151,6 +151,17 @@ function extractTrailingTotalLine(text: string): { amount: number; summary: stri
   return null;
 }
 
+function isLikelyItemCountTotal(line: string, amount: number): boolean {
+  if (amount > 30) return false;
+  const normalized = line.toUpperCase();
+  return (
+    normalized.includes("ITEM") ||
+    normalized.includes("NUMBER") ||
+    normalized.includes("NUMB") ||
+    normalized.includes("PRE-SCANNED")
+  );
+}
+
 export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
   const lines = text
     .split(/\r?\n/)
@@ -189,14 +200,24 @@ export function parseReceiptOcrText(text: string): ParsedReceiptOcr {
   let best = rankedCandidates[0];
   let amount = best?.parsed ?? null;
   let summary = best?.line ?? "";
+  const subTax = extractSubtotalPlusTax(text);
 
-  if (amount === null) {
-    const subTax = extractSubtotalPlusTax(text);
-    if (subTax) {
+  if (subTax) {
+    if (amount === null) {
       amount = subTax.amount;
       summary = subTax.summary;
+    } else {
+      const currentLooksLikeCount = best
+        ? isLikelyItemCountTotal(best.line, amount)
+        : false;
+      const currentFarBelow = amount + 0.5 < subTax.amount;
+      if (currentLooksLikeCount || currentFarBelow) {
+        amount = subTax.amount;
+        summary = subTax.summary;
+      }
     }
   }
+
   if (amount === null) {
     const loose = extractLooseTotalLine(text);
     if (loose) {

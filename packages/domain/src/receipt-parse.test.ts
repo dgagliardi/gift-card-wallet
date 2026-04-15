@@ -63,6 +63,19 @@ describe("parseReceiptOcrText", () => {
     expect(r.summary).toContain("TAX");
   });
 
+  it("prefers SUBTOTAL + TAX when TOTAL line is item-count noise", () => {
+    const text = `
+      COSTCO WHOLESALE
+      TOTAL NUMBER OF PRE-SCANNED ITEMS= 15
+      SUBTOTAL 294.79
+      TAX 6.50
+      **** TOTAL ████
+    `;
+    const r = parseReceiptOcrText(text);
+    expect(r.amount).toBe(301.29);
+    expect(r.summary).toContain("SUBTOTAL");
+  });
+
   it("infers total from pair-sum when keywords are garbled but amounts remain", () => {
     const lines = [];
     for (let i = 0; i < 8; i++) lines.push(`ITEM ${i} 12.99`);
