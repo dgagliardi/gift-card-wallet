@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { getAuthClient } from "@/lib/auth-client";
 
@@ -11,7 +10,6 @@ export function GoogleSignInButton({
 }: {
   label?: string;
 }) {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -23,17 +21,23 @@ export function GoogleSignInButton({
         typeof window !== "undefined"
           ? window.location.origin
           : (process.env.NEXT_PUBLIC_APP_ORIGIN ?? "http://localhost:3000");
-      const { error } = await getAuthClient().signIn.social({
+      const result = await getAuthClient().signIn.social({
         provider: "google",
         callbackURL: `${origin.replace(/\/$/, "")}${basePath}/`,
       });
-      if (error) {
-        setErr(error.message || "Google sign-in failed");
+      if (result?.error) {
+        setErr(result.error.message || "Google sign-in failed");
         setPending(false);
         return;
       }
-      router.replace(`${basePath}/`);
-      router.refresh();
+      const redirectUrl = (result as { data?: { url?: string } } | undefined)?.data?.url;
+      if (redirectUrl) {
+        window.location.assign(redirectUrl);
+        return;
+      }
+      // Fallback in case the SDK doesn't auto-redirect in this browser context.
+      const fallback = `${origin.replace(/\/$/, "")}${basePath}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(`${origin.replace(/\/$/, "")}${basePath}/`)}`;
+      window.location.assign(fallback);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Google sign-in failed");
       setPending(false);
