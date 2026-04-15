@@ -407,19 +407,38 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       let parsed = parseReceiptOcrText(rawText);
       let usedVision = false;
       let visionError = "";
+      const looksCostco = /(COSTCO|WHOLESALE)/i.test(rawText);
 
       const needsVision =
         rawText.trim().length < 12 ||
         parsed.amount === null ||
         parsed.amount <= 0;
 
-      if (needsVision) {
+      const shouldTryVision = needsVision || looksCostco;
+      if (shouldTryVision) {
         const fd = new FormData();
         fd.set("image", prepared);
         const vision = await extractReceiptTextWithGoogleVision(fd);
         if (vision.ok) {
-          parsed = parseReceiptOcrText(vision.text);
-          usedVision = true;
+          const parsedVision = parseReceiptOcrText(vision.text);
+          if (parsedVision.amount !== null && parsedVision.amount > 0) {
+            const localAmount = parsed.amount ?? 0;
+            const visionAmount = parsedVision.amount;
+            const disagreeLarge = Math.abs(localAmount - visionAmount) >= 10;
+            // For Costco receipts we prefer Vision when totals disagree materially.
+            if (
+              parsed.amount === null ||
+              parsed.amount <= 0 ||
+              (looksCostco && disagreeLarge) ||
+              (!looksCostco && parsedVision.summary.length > parsed.summary.length)
+            ) {
+              parsed = parsedVision;
+              usedVision = true;
+            }
+          } else if (parsed.amount === null || parsed.amount <= 0) {
+            parsed = parsedVision;
+            usedVision = true;
+          }
         } else {
           visionError = vision.error;
         }
