@@ -73,6 +73,7 @@ export function CardDetailPage({
   const [txAmount, setTxAmount] = useState("");
   const [txNote, setTxNote] = useState("");
   const [txDate, setTxDate] = useState(() => toDateInputValue(new Date()));
+  const [barcodeZoom, setBarcodeZoom] = useState(1.6);
   const [editForm, setEditForm] = useState({
     brand: initialCard.brand,
     initialBalance: String(initialCard.initial),
@@ -370,12 +371,30 @@ export function CardDetailPage({
         <div>
           {imgVisible ? (
             <div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={card.imageUrl}
-                alt=""
-                className="max-h-[min(55vh,360px)] w-full rounded-lg object-contain bg-slate-100 dark:bg-slate-800"
-              />
+              <div className="overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={card.imageUrl}
+                  alt=""
+                  style={{
+                    transform: `scale(${barcodeZoom})`,
+                    transformOrigin: "center center",
+                  }}
+                  className="max-h-[min(55vh,360px)] w-full object-contain transition-transform duration-150"
+                />
+              </div>
+              <label className="mt-2 block text-xs text-slate-500">
+                Barcode zoom ({barcodeZoom.toFixed(1)}x)
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={barcodeZoom}
+                  onChange={(e) => setBarcodeZoom(Number(e.target.value))}
+                  className="w-full"
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => setImgVisible(false)}
@@ -383,6 +402,9 @@ export function CardDetailPage({
               >
                 Hide barcode
               </button>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Need tighter framing? Use Replace barcode image below to save a cropped version.
+              </p>
             </div>
           ) : (
             <button
