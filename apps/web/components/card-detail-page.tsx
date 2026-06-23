@@ -322,7 +322,7 @@ export function CardDetailPage({
   async function submitTx(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(txAmount);
-    if (!Number.isFinite(amt) || amt <= 0) return;
+    if (!Number.isFinite(amt) || amt === 0) return;
     setIsAddingTransaction(true);
     setActivityMessage("");
     startTransition(async () => {
@@ -332,7 +332,7 @@ export function CardDetailPage({
         setTxNote("");
         setTxList(await getTransactions(card.id));
         setCard((c) => ({ ...c, current: Math.max(0, c.current - amt) }));
-        setActivityMessage("Transaction added");
+        setActivityMessage(amt < 0 ? "Credit added" : "Transaction added");
       } finally {
         setIsAddingTransaction(false);
       }
@@ -649,7 +649,7 @@ export function CardDetailPage({
       </form>
 
       <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
-        <h3 className="text-sm font-semibold">Deduct</h3>
+        <h3 className="text-sm font-semibold">Transactions</h3>
         <label className="mt-2 block cursor-pointer rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600 hover:border-teal-400 hover:text-teal-600 dark:border-slate-600 dark:text-slate-400">
           {receiptScanning ? "Scanning receipt..." : "Scan receipt (prefill transaction)"}
           <input
@@ -673,10 +673,13 @@ export function CardDetailPage({
             onChange={(e) => setTxDate(e.target.value)}
             className="w-full rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950"
           />
-          <input type="number" step="0.01" placeholder="Amount" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
+          <input type="number" step="0.01" placeholder="Amount, e.g. 24.50 or -40.74" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
           <input placeholder="Note" value={txNote} onChange={(e) => setTxNote(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
           <button type="submit" disabled={pending} className="w-full rounded bg-amber-600 py-1.5 text-sm text-white sm:w-auto">Add</button>
         </form>
+        <p className="mt-1 text-xs text-slate-500">
+          Enter purchases as positive amounts. Enter refunds or card credits as negative amounts.
+        </p>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
@@ -684,7 +687,11 @@ export function CardDetailPage({
         <ul className="mt-2 space-y-2 text-sm">
           {txList.map((t) => (
             <li key={t.id} className="flex flex-col border-b border-slate-100 pb-2 dark:border-slate-800">
-              <span>{t.date} — ${t.amount.toFixed(2)} (left ${t.balance.toFixed(2)})</span>
+              <span>
+                {t.date} — {t.amount < 0 ? "Credit" : "Purchase"}{" "}
+                {t.amount < 0 ? "+" : "-"}${Math.abs(t.amount).toFixed(2)} (left $
+                {t.balance.toFixed(2)})
+              </span>
               <span className="text-slate-500">{t.note}</span>
               <button
                 type="button"

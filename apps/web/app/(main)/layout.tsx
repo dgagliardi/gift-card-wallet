@@ -15,8 +15,8 @@ export default async function MainLayout({
   if (!session) redirect("/login");
 
   return (
-    <div className="min-h-screen max-w-[100vw] overflow-x-clip bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+    <div className="app-root-shell max-w-[100vw] overflow-x-clip bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <header className="safe-top-header sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-3">
           <Link
             href={`${basePath}/`}
@@ -33,7 +33,9 @@ export default async function MainLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-4 py-6 pb-28">{children}</main>
+      <main className="safe-area-page safe-bottom-content mx-auto max-w-lg py-6">
+        {children}
+      </main>
     </div>
   );
 }

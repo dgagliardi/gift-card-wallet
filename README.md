@@ -13,7 +13,10 @@ Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/
 
 - Physical and digital cards, balances, transactions, archive, spending stats (same behavior as the original Sheets app).
 - **VPS:** [better-auth](https://www.better-auth.com/) with **Google OAuth** (recommended), optional email/password, Drizzle + SQLite, optional PWA. Digital card **photos** are stored on the server and shown in the list and detail views for checkout.
+- **Mobile PWA hardening:** the web app uses a standalone manifest, no-pinch viewport, dynamic viewport height, safe-area padding, and mobile-safe 16px form controls for a more app-like installed experience.
 - **Digital card OCR autofill:** on image upload, the app runs client-side OCR to best-effort extract card number, PIN, and starting balance from screenshots (fields remain editable).
+- Active cards are shown on the home page by default. Archived cards stay hidden behind an Active / Archived switcher when archived cards exist.
+- Transactions support refund or credit entries by entering a negative amount, e.g. `-40.74`, which adds value back to the card balance.
 
 ---
 
@@ -81,6 +84,7 @@ gift-card-wallet/
 
 - The file picker is configured to let mobile users choose from Photos, Files, or Camera (device determines chooser UI).
 - OCR extraction runs in-browser (client side) via `tesseract.js`; no OCR text processing is performed on the server.
+- Installable PWA behavior is configured through the Next.js manifest route and generated service worker assets. Production deploys should keep `/manifest.webmanifest`, `/sw.js`, and Workbox assets reachable from the app root.
 
 ---
 
@@ -94,6 +98,6 @@ When changing wallet behavior:
 
 ---
 
-## Mobile (Sheets web app)
+## Mobile
 
-Open the deployed Web app URL on your phone and **Add to Home Screen** (Safari / Chrome) for a PWA-like shortcut.
+Open the deployed web app URL on your phone and **Add to Home Screen** (Safari / Chrome) for a PWA-like shortcut. The VPS app is optimized for installed mobile use; the Google Sheets web app remains a lightweight fallback.

@@ -15,7 +15,7 @@ export default async function LoginPage() {
   if (n === 0) redirect("/setup");
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-16 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="app-root-shell safe-area-page relative flex flex-col items-center justify-center bg-slate-50 py-16 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>

@@ -26,8 +26,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -44,7 +44,7 @@ export default function RootLayout({
         <Script id="theme-bootstrap" strategy="beforeInteractive">
           {THEME_BOOTSTRAP_SCRIPT}
         </Script>
-        <div className="flex min-h-screen flex-col">
+        <div className="app-root-shell flex flex-col">
           <div className="flex-1">{children}</div>
           <AppFooter />
         </div>

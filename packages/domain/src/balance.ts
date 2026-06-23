@@ -12,5 +12,5 @@ export function computeCurrentBalance(
   for (const t of transactionsForCard) {
     current -= t.amount;
   }
-  return current;
+  return Math.round(current * 100) / 100;
 }
