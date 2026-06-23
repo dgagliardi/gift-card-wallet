@@ -63,6 +63,10 @@ export function CardDetailPage({
   const [card, setCard] = useState(initialCard);
   const [txList, setTxList] = useState(initialTx);
   const [imgVisible, setImgVisible] = useState(false);
+  const [barcodeView, setBarcodeView] = useState<GestureCrop>({ scale: 1.6, x: 0, y: 0 });
+  const [barcodeDims, setBarcodeDims] = useState<SourceDims | null>(null);
+  const [barcodeViewport, setBarcodeViewport] = useState({ w: 320, h: 260 });
+  const barcodeRef = useRef<HTMLDivElement | null>(null);
   const [editOriginalImage, setEditOriginalImage] = useState<File | null>(null);
   const [editCropPreviewUrl, setEditCropPreviewUrl] = useState("");
   const [sourceDims, setSourceDims] = useState<SourceDims | null>(null);
@@ -90,6 +94,40 @@ export function CardDetailPage({
     startMidX: 0,
     startMidY: 0,
   });
+  const barcodeTouchRef = useRef<{
+    mode: "none" | "pan" | "pinch";
+    startX: number;
+    startY: number;
+    startViewX: number;
+    startViewY: number;
+    startScale: number;
+    startDistance: number;
+    startMidX: number;
+    startMidY: number;
+  }>({
+    mode: "none",
+    startX: 0,
+    startY: 0,
+    startViewX: 0,
+    startViewY: 0,
+    startScale: 1.6,
+    startDistance: 0,
+    startMidX: 0,
+    startMidY: 0,
+  });
+  const barcodeMouseRef = useRef<{
+    dragging: boolean;
+    startX: number;
+    startY: number;
+    startViewX: number;
+    startViewY: number;
+  }>({
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    startViewX: 0,
+    startViewY: 0,
+  });
   const [editExtracting, setEditExtracting] = useState(false);
   const [editExtractMessage, setEditExtractMessage] = useState("");
   const [receiptScanning, setReceiptScanning] = useState(false);
@@ -98,7 +136,6 @@ export function CardDetailPage({
   const [txAmount, setTxAmount] = useState("");
   const [txNote, setTxNote] = useState("");
   const [txDate, setTxDate] = useState(() => toDateInputValue(new Date()));
-  const [barcodeZoom, setBarcodeZoom] = useState(1.6);
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [isSavingBarcodeImage, setIsSavingBarcodeImage] = useState(false);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
@@ -132,6 +169,23 @@ export function CardDetailPage({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    const el = barcodeRef.current;
+    if (!el) return;
+    const update = () => {
+      setBarcodeViewport({ w: el.clientWidth, h: el.clientHeight });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [imgVisible]);
+
+  useEffect(() => {
+    setBarcodeView({ scale: 1.6, x: 0, y: 0 });
+    setBarcodeDims(null);
+  }, [card.imageUrl]);
 
   useEffect(() => {
     if (!activityMessage) return;
@@ -195,6 +249,28 @@ export function CardDetailPage({
       x: clamp(next.x, -maxX, maxX),
       y: clamp(next.y, -maxY, maxY),
     };
+  }
+
+  function clampBarcodeView(next: GestureCrop): GestureCrop {
+    const scale = clamp(next.scale, 1, 12);
+    if (!barcodeDims) return { ...next, scale };
+    const fit = Math.min(
+      barcodeViewport.w / barcodeDims.w,
+      barcodeViewport.h / barcodeDims.h,
+    );
+    const shownW = barcodeDims.w * fit * scale;
+    const shownH = barcodeDims.h * fit * scale;
+    const maxX = Math.max(0, (shownW - barcodeViewport.w) / 2);
+    const maxY = Math.max(0, (shownH - barcodeViewport.h) / 2);
+    return {
+      scale,
+      x: clamp(next.x, -maxX, maxX),
+      y: clamp(next.y, -maxY, maxY),
+    };
+  }
+
+  function resetBarcodeView() {
+    setBarcodeView({ scale: 1.6, x: 0, y: 0 });
   }
 
   async function handleEditImageSelection(originalFile: File) {
@@ -467,40 +543,150 @@ export function CardDetailPage({
       {card.imageUrl ? (
         <div>
           {imgVisible ? (
-            <div>
-              <div className="overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
+            <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div
+                ref={barcodeRef}
+                className="relative h-[min(62vh,440px)] min-h-[260px] w-full touch-none overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
+                onMouseDown={(e) => {
+                  barcodeMouseRef.current = {
+                    dragging: true,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startViewX: barcodeView.x,
+                    startViewY: barcodeView.y,
+                  };
+                }}
+                onMouseMove={(e) => {
+                  const st = barcodeMouseRef.current;
+                  if (!st.dragging) return;
+                  setBarcodeView(
+                    clampBarcodeView({
+                      ...barcodeView,
+                      x: st.startViewX + (e.clientX - st.startX),
+                      y: st.startViewY + (e.clientY - st.startY),
+                    }),
+                  );
+                }}
+                onMouseUp={() => {
+                  barcodeMouseRef.current.dragging = false;
+                }}
+                onMouseLeave={() => {
+                  barcodeMouseRef.current.dragging = false;
+                }}
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    const t = e.touches[0]!;
+                    barcodeTouchRef.current = {
+                      ...barcodeTouchRef.current,
+                      mode: "pan",
+                      startX: t.clientX,
+                      startY: t.clientY,
+                      startViewX: barcodeView.x,
+                      startViewY: barcodeView.y,
+                    };
+                  } else if (e.touches.length >= 2) {
+                    const t0 = e.touches[0]!;
+                    const t1 = e.touches[1]!;
+                    barcodeTouchRef.current = {
+                      ...barcodeTouchRef.current,
+                      mode: "pinch",
+                      startDistance: touchDistance(t0, t1),
+                      startScale: barcodeView.scale,
+                      startViewX: barcodeView.x,
+                      startViewY: barcodeView.y,
+                      startMidX: (t0.clientX + t1.clientX) / 2,
+                      startMidY: (t0.clientY + t1.clientY) / 2,
+                    };
+                  }
+                }}
+                onTouchMove={(e) => {
+                  e.preventDefault();
+                  const st = barcodeTouchRef.current;
+                  if (st.mode === "pan" && e.touches.length === 1) {
+                    const t = e.touches[0]!;
+                    setBarcodeView(
+                      clampBarcodeView({
+                        ...barcodeView,
+                        x: st.startViewX + (t.clientX - st.startX),
+                        y: st.startViewY + (t.clientY - st.startY),
+                      }),
+                    );
+                  } else if (st.mode === "pinch" && e.touches.length >= 2) {
+                    const t0 = e.touches[0]!;
+                    const t1 = e.touches[1]!;
+                    const dist = touchDistance(t0, t1);
+                    const midX = (t0.clientX + t1.clientX) / 2;
+                    const midY = (t0.clientY + t1.clientY) / 2;
+                    setBarcodeView(
+                      clampBarcodeView({
+                        scale: st.startScale * (dist / Math.max(1, st.startDistance)),
+                        x: st.startViewX + (midX - st.startMidX),
+                        y: st.startViewY + (midY - st.startMidY),
+                      }),
+                    );
+                  }
+                }}
+                onTouchEnd={() => {
+                  barcodeTouchRef.current.mode = "none";
+                }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={card.imageUrl}
                   alt=""
+                  draggable={false}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setBarcodeDims({
+                      w: img.naturalWidth || img.width,
+                      h: img.naturalHeight || img.height,
+                    });
+                  }}
                   style={{
-                    transform: `scale(${barcodeZoom})`,
+                    transform: `translate(${barcodeView.x}px, ${barcodeView.y}px) scale(${barcodeView.scale})`,
                     transformOrigin: "center center",
                   }}
-                  className="max-h-[min(55vh,360px)] w-full object-contain transition-transform duration-150"
+                  className="h-full w-full select-none object-contain transition-transform duration-75"
                 />
+                <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-black/5 dark:ring-white/10" />
               </div>
-              <label className="mt-2 block text-xs text-slate-500">
-                Barcode zoom ({barcodeZoom.toFixed(1)}x)
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  step={0.1}
-                  value={barcodeZoom}
-                  onChange={(e) => setBarcodeZoom(Number(e.target.value))}
-                  className="w-full"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => setImgVisible(false)}
-                className="mt-2 w-full rounded-lg border border-slate-300 py-1.5 text-xs text-slate-600 dark:border-slate-600 dark:text-slate-400"
-              >
-                Hide barcode
-              </button>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Zoom {barcodeView.scale.toFixed(1)}x
+                </span>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={resetBarcodeView}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImgVisible(false)}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Hide
+                  </button>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={12}
+                step={0.1}
+                value={barcodeView.scale}
+                onChange={(e) =>
+                  setBarcodeView((prev) =>
+                    clampBarcodeView({ ...prev, scale: Number(e.target.value) }),
+                  )
+                }
+                className="mt-2 w-full"
+                aria-label="Barcode zoom"
+              />
               <p className="mt-1 text-[11px] text-slate-500">
-                Need tighter framing? Use Replace barcode image below to save a cropped version.
+                Drag to center the barcode. Pinch or use the slider to zoom for checkout scanning.
               </p>
             </div>
           ) : (
