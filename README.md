@@ -15,6 +15,7 @@ Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/
 - **VPS:** [better-auth](https://www.better-auth.com/) with **Google OAuth** (recommended), optional email/password, Drizzle + SQLite, optional PWA. Digital card **photos** are stored on the server and shown in the list and detail views for checkout.
 - **Mobile PWA hardening:** the web app uses a standalone manifest, no-pinch viewport, dynamic viewport height, safe-area padding, and mobile-safe 16px form controls for a more app-like installed experience.
 - **Digital card OCR autofill:** on image upload, the app runs client-side OCR to best-effort extract card number, PIN, and starting balance from screenshots (fields remain editable).
+- **Checkout barcode viewer:** digital card images can be panned and zoomed at checkout time, so full-card screenshots remain usable without pre-cropping.
 - Active cards are shown on the home page by default. Archived cards stay hidden behind an Active / Archived switcher when archived cards exist.
 - Transactions support refund or credit entries by entering a negative amount, e.g. `-40.74`, which adds value back to the card balance.
 
@@ -84,6 +85,7 @@ gift-card-wallet/
 
 - The file picker is configured to let mobile users choose from Photos, Files, or Camera (device determines chooser UI).
 - OCR extraction runs in-browser (client side) via `tesseract.js`; no OCR text processing is performed on the server.
+- On card detail pages, **Show barcode** opens an interactive viewer. Drag to pan, pinch or use the slider to zoom, and tap Reset to restore the default framing. This does not overwrite the saved image.
 - Installable PWA behavior is configured through the Next.js manifest route and generated service worker assets. Production deploys should keep `/manifest.webmanifest`, `/sw.js`, and Workbox assets reachable from the app root.
 
 ---
