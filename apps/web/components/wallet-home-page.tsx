@@ -2,6 +2,7 @@
 
 import type { WalletStats } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import type { WalletCard } from "@/app/actions/wallet";
 
 type Props = {
@@ -11,6 +12,17 @@ type Props = {
 
 export function WalletHomePage({ initialCards, initialStats }: Props) {
   const router = useRouter();
+  const [view, setView] = useState<"active" | "archived">("active");
+  const activeCards = useMemo(
+    () => initialCards.filter((card) => !card.archived),
+    [initialCards],
+  );
+  const archivedCards = useMemo(
+    () => initialCards.filter((card) => card.archived),
+    [initialCards],
+  );
+  const visibleCards = view === "active" ? activeCards : archivedCards;
+  const hasArchived = archivedCards.length > 0;
 
   return (
     <div className="space-y-6">
@@ -51,8 +63,48 @@ export function WalletHomePage({ initialCards, initialStats }: Props) {
         Add card
       </button>
 
-      <div className="space-y-3">
-        {initialCards.map((c) => (
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Gift cards
+          </h2>
+          {hasArchived ? (
+            <div
+              className="grid grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 text-xs font-medium shadow-sm dark:border-slate-800 dark:bg-slate-900/60"
+              role="tablist"
+              aria-label="Gift card list"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "active"}
+                onClick={() => setView("active")}
+                className={`rounded-md px-3 py-1.5 ${
+                  view === "active"
+                    ? "bg-teal-600 text-white"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                }`}
+              >
+                Active {activeCards.length}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "archived"}
+                onClick={() => setView("archived")}
+                className={`rounded-md px-3 py-1.5 ${
+                  view === "archived"
+                    ? "bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-950"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                }`}
+              >
+                Archived {archivedCards.length}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {visibleCards.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -84,7 +136,14 @@ export function WalletHomePage({ initialCards, initialStats }: Props) {
             </div>
           </button>
         ))}
-      </div>
+        {visibleCards.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+            {view === "active"
+              ? "No active cards. Add a card or switch to archived."
+              : "No archived cards."}
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

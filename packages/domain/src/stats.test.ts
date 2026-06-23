@@ -42,4 +42,13 @@ describe("computeCurrentBalance", () => {
       computeCurrentBalance(100, [{ amount: 10 }, { amount: 25.5 }]),
     ).toBe(64.5);
   });
+
+  it("adds negative transaction amounts back to the current balance", () => {
+    expect(
+      computeCurrentBalance(100, [
+        { amount: 50 },
+        { amount: -40.74 },
+      ]),
+    ).toBe(90.74);
+  });
 });

@@ -3,7 +3,7 @@ import { getAllTransactions } from "@/app/actions/wallet";
 
 export default async function TransactionsPage() {
   const tx = await getAllTransactions();
-  const total = tx.reduce((sum, t) => sum + t.amount, 0);
+  const netSpent = tx.reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="space-y-4">
@@ -19,9 +19,9 @@ export default async function TransactionsPage() {
         </Link>
       </div>
       <p className="text-sm text-slate-500">
-        Total:{" "}
+        Net spend:{" "}
         <span className="font-semibold text-slate-700 dark:text-slate-300">
-          ${total.toFixed(2)}
+          ${netSpent.toFixed(2)}
         </span>{" "}
         across {tx.length} transactions
       </p>
@@ -33,10 +33,18 @@ export default async function TransactionsPage() {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">{t.cardBrand}</span>
-              <span className="font-semibold">${t.amount.toFixed(2)}</span>
+              <span
+                className={`font-semibold ${
+                  t.amount < 0
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-slate-900 dark:text-slate-100"
+                }`}
+              >
+                {t.amount < 0 ? "+" : "-"}${Math.abs(t.amount).toFixed(2)}
+              </span>
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              {t.date} · {t.cardType}
+              {t.date} · {t.cardType} · {t.amount < 0 ? "Credit" : "Purchase"}
             </div>
             {t.note ? <div className="mt-1 text-xs text-slate-500">{t.note}</div> : null}
           </li>
