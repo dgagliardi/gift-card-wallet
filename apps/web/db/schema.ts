@@ -105,6 +105,8 @@ export const giftCardTransaction = sqliteTable(
       .references(() => giftCard.id, { onDelete: "cascade" }),
     date: integer("date", { mode: "timestamp_ms" }).notNull(),
     amount: real("amount").notNull(),
+    /** "gas" | "merchandise". Backfilled from card type by ensureWalletSchema. */
+    category: text("category").notNull(),
     note: text("note").notNull().default(""),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
