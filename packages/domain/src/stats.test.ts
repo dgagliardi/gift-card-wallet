@@ -62,6 +62,30 @@ describe("computeWalletStats categories and adjustments", () => {
     expect(s.spentYearGas + s.spentYearMerchandise).toBe(s.spentYear);
   });
 
+  it("reconciles the year total with amounts that sum imprecisely in binary", () => {
+    // Regression: 112.4 + 164.55 === 276.95000000000005, so rounding the year
+    // total from its own raw sum left the three displayed figures unable to
+    // add up. The total is derived from the rounded parts instead.
+    const now = new Date("2026-06-15T12:00:00Z");
+    const s = computeWalletStats(
+      CARDS,
+      [
+        { cardId: "p", date: new Date("2026-06-10"), amount: 62.4, category: "gas" },
+        { cardId: "p", date: new Date("2026-06-11"), amount: 58.1, category: "gas" },
+        { cardId: "p", date: new Date("2026-06-12"), amount: -8.1, category: "gas" },
+        { cardId: "d", date: new Date("2026-06-13"), amount: 124.55, category: "merchandise" },
+        { cardId: "d", date: new Date("2026-01-05"), amount: 40, category: "merchandise" },
+      ],
+      now,
+    );
+    expect(s.spentYearGas).toBe(112.4);
+    expect(s.spentYearMerchandise).toBe(164.55);
+    expect(s.spentYear).toBe(276.95);
+    expect(
+      Math.round((s.spentYearGas + s.spentYearMerchandise) * 100) / 100,
+    ).toBe(s.spentYear);
+  });
+
   it("nets an adjustment against its own category", () => {
     const now = new Date("2026-06-15T12:00:00Z");
     const s = computeWalletStats(

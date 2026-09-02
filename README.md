@@ -2,12 +2,14 @@
 
 A lightweight, mobile-friendly way to track physical and digital gift cards, prepaid cards, and store credits. This repository supports **two deployments**:
 
-| Deployment | Location | Data |
-|------------|----------|------|
-| **Google Sheets** | [apps/sheets/](apps/sheets/) — copy `Code.gs` and `Index.html` into Apps Script | Your Google Sheet + Drive |
-| **VPS / self-hosted** | [apps/web/](apps/web/) — Next.js, SQLite, local file uploads | `DATABASE_PATH` + `UPLOADS_PATH` on disk |
+| Deployment | Status | Location | Data |
+|------------|--------|----------|------|
+| **VPS / self-hosted** | **Production** | [apps/web/](apps/web/) — Next.js, SQLite, local file uploads | `DATABASE_PATH` + `UPLOADS_PATH` on disk |
+| **Google Sheets** | Superseded MVP | [apps/sheets/](apps/sheets/) — copy `Code.gs` and `Index.html` into Apps Script | Your Google Sheet + Drive |
 
-Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/](packages/domain/) and is covered by unit tests. The Sheets app reimplements the same behavior in Apps Script; if you change stats or balance rules in `packages/domain`, update `apps/sheets/Code.gs` accordingly and run `pnpm test` before merging.
+`apps/web` is the production app. The Google Sheets app was the original MVP and is kept as a lightweight reference; it is **no longer maintained in parity** with the web app. See [Sheets divergence](#sheets-divergence).
+
+Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/](packages/domain/) and is covered by unit tests.
 
 ### Features
 
@@ -18,6 +20,11 @@ Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/
 - **Checkout barcode viewer:** digital card images can be panned and zoomed at checkout time, so full-card screenshots remain usable without pre-cropping.
 - Active cards are shown on the home page by default. Archived cards stay hidden behind an Active / Archived switcher when archived cards exist.
 - Transactions support refund or credit entries by entering a negative amount, e.g. `-40.74`, which adds value back to the card balance.
+- **Spending categories:** every transaction is either **gas** or **merchandise**. The entry form pre-selects it from the card type (physical → gas, digital → merchandise) and one tap overrides it. Tap the chip on any past transaction to reclassify it.
+- **Adjustments:** a negative amount is an adjustment correcting an overstated charge. It carries the same category as the charge it corrects and **reduces** that category's totals. "Adjustment" is derived from the sign, never stored.
+- **Category stats:** the home page reports gas, merchandise, and total spend year to date.
+- **Expenses view:** `/expenses` breaks spending down by year and by month, with adjustments shown as a memo column.
+- Existing databases are migrated and backfilled automatically on first boot after deploy — no manual `pnpm db:push` step is required for the category column.
 
 ---
 
@@ -90,13 +97,22 @@ gift-card-wallet/
 
 ---
 
-## Dual-deployment checklist (PRs)
+## Checklist (PRs)
 
 When changing wallet behavior:
 
 - [ ] Updated `packages/domain` and `pnpm test` passes
-- [ ] If stats/balance logic changed, updated `apps/sheets/Code.gs` to match
 - [ ] If API or fields changed, updated `apps/web` Drizzle schema and UI as needed
+- [ ] If the schema changed, `apps/web/lib/schema-bootstrap.ts` converges existing databases (the deploy workflow does **not** run `pnpm db:push`)
+
+## Sheets divergence
+
+`apps/sheets` is the superseded MVP and is deliberately **not** kept in sync. Concrete differences today:
+
+- **No categories.** The Sheets app has no gas/merchandise split and no expenses view.
+- **Gross vs net spend.** `apps/sheets/Code.gs` skips non-positive amounts, so its year-to-date figure is *gross* of adjustments. The web app nets them. For any wallet containing adjustments, the Sheets total will read **higher** than the web app's.
+
+Do not treat the two totals as reconcilable. `apps/web` is the source of truth.
 
 ---
 

@@ -165,11 +165,17 @@ denominator. Its numerator therefore deliberately differs from `spentLast30`.
 This field is no longer rendered on the home page but remains in the schema and
 in the Sheets implementation.
 
-Each category total is rounded to cents independently, and `spentYear` is rounded
-from its own unrounded sum. Because every amount stored by the app is
-cent-precision, `spentYearGas + spentYearMerchandise === spentYear` in practice;
-the test suite asserts this identity on cent-valued fixtures rather than claiming
-it for arbitrary floats.
+Each category total is rounded to cents, and `spentYear` is then derived from
+those **rounded** figures rather than from its own unrounded sum. Rounding the
+three independently does not reconcile: `112.4 + 164.55` evaluates to
+`276.95000000000005` in IEEE 754, so the parts would not add up to the whole.
+Deriving the total guarantees `round2(spentYearGas + spentYearMerchandise) ===
+spentYear` for any input. `computeExpenseSummary` already composes its totals
+this way, so both surfaces agree.
+
+Note that the raw expression `spentYearGas + spentYearMerchandise === spentYear`
+is still false for such values — that is a property of binary floating point, not
+of the data. Displayed to cents, the figures always reconcile.
 
 *Known divergence created here:* `apps/sheets/Code.gs` continues to report gross
 figures. The two deployments will disagree for any wallet containing adjustments.

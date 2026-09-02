@@ -24,7 +24,6 @@ export function computeWalletStats(
   const currentYear = now.getFullYear();
 
   let spentLast30 = 0;
-  let spentYear = 0;
   let spentYearGas = 0;
   let spentYearMerchandise = 0;
   let purchaseTotal30 = 0;
@@ -45,7 +44,6 @@ export function computeWalletStats(
     }
 
     if (transDate.getFullYear() === currentYear) {
-      spentYear += t.amount;
       if (t.category === "merchandise") spentYearMerchandise += t.amount;
       else spentYearGas += t.amount;
     }
@@ -54,11 +52,17 @@ export function computeWalletStats(
   const avgPurchaseLast30 =
     purchaseCount30 > 0 ? purchaseTotal30 / purchaseCount30 : 0;
 
+  // Derive the year total from the rounded category figures rather than from
+  // its own raw sum, so the three numbers shown together always reconcile.
+  // Rounding independently would not: 112.4 + 164.55 is 276.95000000000005.
+  const gas = round2(spentYearGas);
+  const merchandise = round2(spentYearMerchandise);
+
   return {
     spentLast30: round2(spentLast30),
-    spentYear: round2(spentYear),
-    spentYearGas: round2(spentYearGas),
-    spentYearMerchandise: round2(spentYearMerchandise),
+    spentYear: round2(gas + merchandise),
+    spentYearGas: gas,
+    spentYearMerchandise: merchandise,
     avgPurchaseLast30: round2(avgPurchaseLast30),
     yearLabel: String(currentYear),
   };
