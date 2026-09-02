@@ -81,6 +81,26 @@ describe("ensureWalletSchema", () => {
     expect(categories().find((r) => r.id === "t3")?.category).toBe("merchandise");
   });
 
+  it("is a no-op on a fresh database that has no tables yet", () => {
+    // Regression: PRAGMA table_info returns empty both for a missing column
+    // and a missing table, so this used to ALTER a table that did not exist
+    // and crash the app at import before `pnpm db:push` had ever run.
+    const fresh = new Database(":memory:");
+    expect(() => ensureWalletSchema(fresh)).not.toThrow();
+    fresh.close();
+  });
+
+  it("performs no write once every row is already classified", () => {
+    // Regression: `next build` imports lib/db.ts from several workers at once.
+    // An unconditional repair UPDATE made each import contend for the write
+    // lock and fail with SQLITE_BUSY. query_only makes any write throw, so
+    // this test fails if the steady-state path regains one.
+    ensureWalletSchema(sqlite);
+    sqlite.pragma("query_only = ON");
+    expect(() => ensureWalletSchema(sqlite)).not.toThrow();
+    sqlite.pragma("query_only = OFF");
+  });
+
   it("runs clean on a database that already has the column and no rows", () => {
     sqlite.exec("DELETE FROM gift_card_transaction");
     ensureWalletSchema(sqlite);

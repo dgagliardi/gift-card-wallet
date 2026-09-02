@@ -13,6 +13,9 @@ fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
+// `next build` imports this module from several workers at once; without a
+// busy timeout the losers of a write-lock race fail outright with SQLITE_BUSY.
+sqlite.pragma("busy_timeout = 5000");
 
 // Must run before any query: the deploy workflow never runs `pnpm db:push`.
 ensureWalletSchema(sqlite);

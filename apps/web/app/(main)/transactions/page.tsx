@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getAllTransactions } from "@/app/actions/wallet";
 
 export default async function TransactionsPage() {
@@ -7,17 +6,9 @@ export default async function TransactionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-teal-600 dark:text-teal-400">
-          Transaction History
-        </h2>
-        <Link
-          href="/"
-          className="text-sm font-medium text-teal-600 hover:text-teal-500 dark:text-teal-400"
-        >
-          Home
-        </Link>
-      </div>
+      <h2 className="text-xl font-semibold text-teal-600 dark:text-teal-400">
+        Transaction History
+      </h2>
       <p className="text-sm text-slate-500">
         Net spend:{" "}
         <span className="font-semibold text-slate-700 dark:text-slate-300">
@@ -44,7 +35,8 @@ export default async function TransactionsPage() {
               </span>
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              {t.date} · {t.cardType} · {t.amount < 0 ? "Credit" : "Purchase"}
+              {t.date} · {t.cardType} · {t.amount < 0 ? "Adjustment" : "Purchase"} ·{" "}
+              {t.category === "gas" ? "Gas" : "Merchandise"}
             </div>
             {t.note ? <div className="mt-1 text-xs text-slate-500">{t.note}</div> : null}
           </li>
