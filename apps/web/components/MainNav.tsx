@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const ITEMS = [
-  { href: "/", label: "Cards" },
-  { href: "/expenses", label: "Expenses" },
-  { href: "/transactions", label: "History" },
+  // "Cards" owns the card detail and add-card routes, so it stays highlighted
+  // while you are inside them rather than leaving the nav with nothing active.
+  { href: "/", label: "Cards", owns: ["/card", "/add-card"] },
+  { href: "/expenses", label: "Expenses", owns: [] },
+  { href: "/transactions", label: "History", owns: [] },
 ];
 
 export function MainNav() {
@@ -22,9 +24,11 @@ export function MainNav() {
   return (
     <nav className="mx-auto flex max-w-lg gap-1 px-2" aria-label="Main">
       {ITEMS.map((item) => {
-        // "/" must match exactly, or it would highlight on every route.
+        // "/" must match exactly, or it would highlight on every route; its
+        // child sections are claimed explicitly through `owns`.
         const active =
-          item.href === "/" ? route === "/" : route.startsWith(item.href);
+          (item.href === "/" ? route === "/" : route.startsWith(item.href)) ||
+          item.owns.some((prefix) => route.startsWith(prefix));
         return (
           <Link
             key={item.href}
