@@ -39,18 +39,24 @@ export function WalletHomePage({ initialCards, initialStats }: Props) {
             Transaction History →
           </button>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+        <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
           <div>
-            <div className="text-xs text-slate-500">Last 30 days</div>
-            <div className="font-semibold">${initialStats.spentLast30}</div>
+            <div className="text-xs text-slate-500">Gas YTD</div>
+            <div className="font-semibold">
+              ${initialStats.spentYearGas.toFixed(2)}
+            </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Year to date</div>
-            <div className="font-semibold">${initialStats.spentYear}</div>
+            <div className="text-xs text-slate-500">Merchandise YTD</div>
+            <div className="font-semibold">
+              ${initialStats.spentYearMerchandise.toFixed(2)}
+            </div>
           </div>
-          <div className="col-span-2">
-            <div className="text-xs text-slate-500">Avg purchase (30d)</div>
-            <div className="font-semibold">${initialStats.avgPurchaseLast30}</div>
+          <div>
+            <div className="text-xs text-slate-500">Total YTD</div>
+            <div className="font-semibold">
+              ${initialStats.spentYear.toFixed(2)}
+            </div>
           </div>
         </div>
       </section>

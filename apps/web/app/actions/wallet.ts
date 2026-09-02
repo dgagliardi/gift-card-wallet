@@ -1,9 +1,13 @@
 "use server";
 
 import {
+  categoryForCardType,
   computeCurrentBalance,
+  computeExpenseSummary,
   computeWalletStats,
   type CardRow,
+  type ExpenseSummary,
+  type TransactionCategory,
   type TransactionRow,
 } from "@gift-card-wallet/domain";
 import { and, asc, desc, eq } from "drizzle-orm";
@@ -27,6 +31,8 @@ export type WalletCard = {
   pin: string;
   balanceUrl: string;
   archived: boolean;
+  /** What the entry form pre-selects for a new transaction on this card. */
+  defaultCategory: TransactionCategory;
 };
 
 export type WalletTx = {
@@ -35,6 +41,7 @@ export type WalletTx = {
   amount: number;
   balance: number;
   note: string;
+  category: TransactionCategory;
 };
 
 export async function getWalletPayload() {
@@ -63,6 +70,7 @@ export async function getWalletPayload() {
     cardId: t.cardId,
     date: new Date(t.date),
     amount: t.amount,
+    category: t.category as TransactionCategory,
   }));
 
   const stats = computeWalletStats(cardRows, transRows);
@@ -95,6 +103,7 @@ export async function getWalletPayload() {
       pin: c.pin,
       balanceUrl: c.balanceUrl,
       archived: c.archived,
+      defaultCategory: categoryForCardType(c.type),
     };
   });
 
@@ -213,11 +222,21 @@ export async function addTransaction(
   amount: number,
   note: string,
   txDateInput?: string,
+  category?: TransactionCategory,
 ) {
   const session = await requireSession();
   const uid = session.user.id;
   const now = new Date();
   const txDate = parseTransactionDateInput(txDateInput, now);
+
+  // Reading the card resolves the default category and confirms the card
+  // belongs to this user before we write a row against it.
+  const card = await db
+    .select({ type: giftCard.type })
+    .from(giftCard)
+    .where(and(eq(giftCard.id, cardId), eq(giftCard.userId, uid)))
+    .limit(1);
+  if (card.length === 0) return getWalletPayload();
 
   await db.insert(giftCardTransaction).values({
     id: newId(),
@@ -225,6 +244,7 @@ export async function addTransaction(
     cardId,
     date: txDate,
     amount,
+    category: category ?? categoryForCardType(card[0].type),
     note: note ?? "",
     createdAt: now,
     updatedAt: now,
@@ -268,6 +288,7 @@ export async function getTransactions(cardId: string): Promise<WalletTx[]> {
       amount: t.amount,
       balance: running,
       note: t.note,
+      category: t.category as TransactionCategory,
     });
   }
 
@@ -328,6 +349,7 @@ export type AllTx = {
   note: string;
   cardBrand: string;
   cardType: string;
+  category: TransactionCategory;
 };
 
 export async function getAllTransactions(): Promise<AllTx[]> {
@@ -340,6 +362,7 @@ export async function getAllTransactions(): Promise<AllTx[]> {
       date: giftCardTransaction.date,
       amount: giftCardTransaction.amount,
       note: giftCardTransaction.note,
+      category: giftCardTransaction.category,
       brand: giftCard.brand,
       type: giftCard.type,
     })
@@ -355,6 +378,7 @@ export async function getAllTransactions(): Promise<AllTx[]> {
     note: r.note,
     cardBrand: r.brand,
     cardType: r.type,
+    category: r.category as TransactionCategory,
   }));
 }
 
@@ -397,4 +421,50 @@ export async function toggleArchive(cardId: string, archived: boolean) {
 
   revalidatePath("/");
   return getWalletPayload();
+}
+
+export async function updateTransactionCategory(
+  txId: string,
+  cardId: string,
+  category: TransactionCategory,
+): Promise<WalletTx[]> {
+  const session = await requireSession();
+  const uid = session.user.id;
+
+  await db
+    .update(giftCardTransaction)
+    .set({ category, updatedAt: new Date() })
+    .where(
+      and(
+        eq(giftCardTransaction.id, txId),
+        eq(giftCardTransaction.cardId, cardId),
+        eq(giftCardTransaction.userId, uid),
+      ),
+    );
+
+  revalidatePath("/");
+  return getTransactions(cardId);
+}
+
+export async function getExpenseSummary(): Promise<ExpenseSummary> {
+  const session = await requireSession();
+
+  const rows = await db
+    .select({
+      cardId: giftCardTransaction.cardId,
+      date: giftCardTransaction.date,
+      amount: giftCardTransaction.amount,
+      category: giftCardTransaction.category,
+    })
+    .from(giftCardTransaction)
+    .where(eq(giftCardTransaction.userId, session.user.id));
+
+  return computeExpenseSummary(
+    rows.map((r) => ({
+      cardId: r.cardId,
+      date: new Date(r.date),
+      amount: r.amount,
+      category: r.category as TransactionCategory,
+    })),
+  );
 }

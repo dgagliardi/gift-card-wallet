@@ -1,6 +1,10 @@
 "use client";
 
-import { parseGiftCardOcrText, parseReceiptOcrText } from "@gift-card-wallet/domain";
+import {
+  parseGiftCardOcrText,
+  parseReceiptOcrText,
+  type TransactionCategory,
+} from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { WalletCard, WalletTx } from "@/app/actions/wallet";
@@ -11,7 +15,9 @@ import {
   toggleArchive,
   updateCardDetails,
   updateCardImageFromForm,
+  updateTransactionCategory,
 } from "@/app/actions/wallet";
+import { CategoryToggle } from "@/components/category-toggle";
 import { extractReceiptTextWithGoogleVision } from "@/app/actions/receipt-vision";
 
 type GestureCrop = { scale: number; x: number; y: number };
@@ -136,6 +142,9 @@ export function CardDetailPage({
   const [txAmount, setTxAmount] = useState("");
   const [txNote, setTxNote] = useState("");
   const [txDate, setTxDate] = useState(() => toDateInputValue(new Date()));
+  const [txCategory, setTxCategory] = useState<TransactionCategory>(
+    initialCard.defaultCategory,
+  );
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [isSavingBarcodeImage, setIsSavingBarcodeImage] = useState(false);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
@@ -403,9 +412,10 @@ export function CardDetailPage({
     setActivityMessage("");
     startTransition(async () => {
       try {
-        await addTransaction(card.id, amt, txNote, txDate);
+        await addTransaction(card.id, amt, txNote, txDate, txCategory);
         setTxAmount("");
         setTxNote("");
+        setTxCategory(card.defaultCategory);
         setTxList(await getTransactions(card.id));
         setCard((c) => ({ ...c, current: Math.max(0, c.current - amt) }));
         setActivityMessage(amt < 0 ? "Credit added" : "Transaction added");
@@ -861,6 +871,9 @@ export function CardDetailPage({
           />
           <input type="number" step="0.01" placeholder="Amount, e.g. 24.50 or -40.74" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
           <input placeholder="Note" value={txNote} onChange={(e) => setTxNote(e.target.value)} className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 dark:border-slate-600 dark:bg-slate-950" />
+          <div className="w-full">
+            <CategoryToggle value={txCategory} onChange={setTxCategory} disabled={pending} />
+          </div>
           <button type="submit" disabled={pending} className="w-full rounded bg-amber-600 py-1.5 text-sm text-white sm:w-auto">Add</button>
         </form>
         <p className="mt-1 text-xs text-slate-500">
@@ -874,11 +887,24 @@ export function CardDetailPage({
           {txList.map((t) => (
             <li key={t.id} className="flex flex-col border-b border-slate-100 pb-2 dark:border-slate-800">
               <span>
-                {t.date} — {t.amount < 0 ? "Credit" : "Purchase"}{" "}
+                {t.date} — {t.amount < 0 ? "Adjustment" : "Purchase"}{" "}
                 {t.amount < 0 ? "+" : "-"}${Math.abs(t.amount).toFixed(2)} (left $
                 {t.balance.toFixed(2)})
               </span>
               <span className="text-slate-500">{t.note}</span>
+              <div className="mt-1">
+                <CategoryToggle
+                  size="sm"
+                  disabled={pending}
+                  value={t.category}
+                  onChange={(next) => {
+                    startTransition(async () => {
+                      setTxList(await updateTransactionCategory(t.id, card.id, next));
+                      refresh();
+                    });
+                  }}
+                />
+              </div>
               <button
                 type="button"
                 className="mt-1 text-left text-xs text-red-600"

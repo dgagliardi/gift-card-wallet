@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { MainNav } from "@/components/MainNav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getSession } from "@/lib/session";
@@ -32,6 +33,7 @@ export default async function MainLayout({
             <SignOutButton />
           </div>
         </div>
+        <MainNav />
       </header>
       <main className="safe-area-page safe-bottom-content mx-auto max-w-lg py-6">
         {children}
