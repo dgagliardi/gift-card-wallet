@@ -2,15 +2,47 @@
 
 import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { saveCardFromForm } from "@/app/actions/wallet";
+
+type CardType = "Physical" | "Digital";
+
+type BarcodeResult = {
+  rawValue?: string;
+};
+
+type BarcodeDetectorLike = {
+  detect(image: ImageBitmapSource): Promise<BarcodeResult[]>;
+};
+
+type WindowWithBarcodeDetector = Window & {
+  BarcodeDetector?: new (options?: { formats?: string[] }) => BarcodeDetectorLike;
+};
+
+const barcodeFormats = [
+  "aztec",
+  "code_128",
+  "code_39",
+  "code_93",
+  "codabar",
+  "data_matrix",
+  "ean_13",
+  "ean_8",
+  "itf",
+  "pdf417",
+  "qr_code",
+  "upc_a",
+  "upc_e",
+];
 
 export function AddCardPage() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
     brand: "",
-    type: "Physical" as "Physical" | "Digital",
+    type: "Physical" as CardType,
     initialBalance: "",
     cardNumber: "",
     pin: "",
@@ -19,6 +51,25 @@ export function AddCardPage() {
   });
   const [extracting, setExtracting] = useState(false);
   const [extractMessage, setExtractMessage] = useState("");
+
+  async function decodeBarcodeFromImage(file: File): Promise<string> {
+    const BarcodeDetector = (window as WindowWithBarcodeDetector).BarcodeDetector;
+    if (!BarcodeDetector || typeof createImageBitmap === "undefined") return "";
+
+    let bitmap: ImageBitmap | null = null;
+    try {
+      bitmap = await createImageBitmap(file);
+      const detector = new BarcodeDetector({ formats: barcodeFormats });
+      const barcodes = await detector.detect(bitmap);
+      return barcodes
+        .map((barcode) => barcode.rawValue?.trim() ?? "")
+        .find((value) => /\d{8,}/.test(value.replace(/\D/g, ""))) ?? "";
+    } catch {
+      return "";
+    } finally {
+      bitmap?.close();
+    }
+  }
 
   async function extractTextFromImage(file: File): Promise<string> {
     const { createWorker } = await import("tesseract.js");
@@ -39,15 +90,44 @@ export function AddCardPage() {
     setExtracting(true);
     setExtractMessage("");
     try {
-      const parsed = parseGiftCardOcrText(await extractTextFromImage(file));
+      const barcodeValue = await decodeBarcodeFromImage(file);
+      const barcodeParsed = barcodeValue
+        ? parseGiftCardOcrText(`Card Number: ${barcodeValue}`)
+        : { brand: "", cardNumber: "", pin: "", balance: null };
+      let parsed = barcodeParsed;
+
+      try {
+        const ocrParsed = parseGiftCardOcrText(await extractTextFromImage(file));
+        parsed = {
+          brand: ocrParsed.brand || barcodeParsed.brand,
+          cardNumber: ocrParsed.cardNumber || barcodeParsed.cardNumber,
+          pin: ocrParsed.pin || barcodeParsed.pin,
+          balance: ocrParsed.balance ?? barcodeParsed.balance,
+        };
+      } catch {
+        if (!barcodeValue) throw new Error("Image text extraction failed");
+      }
+
       setForm((f) => ({
         ...f,
         image: file,
+        brand: parsed.brand || f.brand,
         cardNumber: parsed.cardNumber || f.cardNumber,
         pin: parsed.pin || f.pin,
         initialBalance: parsed.balance !== null ? parsed.balance.toFixed(2) : f.initialBalance,
       }));
-      setExtractMessage("Detected card details from image.");
+
+      const fields = [
+        parsed.brand ? "brand" : "",
+        parsed.cardNumber ? "card number" : "",
+        parsed.pin ? "PIN" : "",
+        parsed.balance !== null ? "balance" : "",
+      ].filter(Boolean);
+      setExtractMessage(
+        fields.length > 0
+          ? `Detected ${fields.join(", ")} from image. Review before saving.`
+          : "No card details were detected. You can still enter them manually.",
+      );
     } catch {
       setExtractMessage("Could not extract details from this image.");
     } finally {
@@ -96,7 +176,7 @@ export function AddCardPage() {
             onChange={(e) =>
               setForm((f) => ({
                 ...f,
-                type: e.target.value as "Physical" | "Digital",
+                type: e.target.value as CardType,
               }))
             }
             className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
@@ -106,20 +186,69 @@ export function AddCardPage() {
           </select>
         </label>
 
-        {form.type === "Digital" ? (
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-            Barcode / card image
-            <input
-              type="file"
-              accept="image/*"
-              className="mt-1 w-full text-sm"
-              onChange={async (e) => onImageSelected(e.target.files?.[0] ?? null)}
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              {extracting ? "Extracting details..." : extractMessage}
+        <div className="space-y-3 border-y border-slate-200 py-3 dark:border-slate-800">
+          <div>
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              {form.type === "Physical" ? "Physical card photo" : "Digital barcode image"}
             </p>
-          </label>
-        ) : null}
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
+              {form.type === "Physical"
+                ? "Take a photo to fill card number, PIN, balance, and brand when visible."
+                : "Upload the barcode image to fill the card number, plus any visible PIN or balance text."}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              Take photo
+            </button>
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              {form.type === "Digital" ? "Upload barcode" : "Choose image"}
+            </button>
+          </div>
+
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onClick={(e) => {
+              e.currentTarget.value = "";
+            }}
+            onChange={async (e) => onImageSelected(e.target.files?.[0] ?? null)}
+          />
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onClick={(e) => {
+              e.currentTarget.value = "";
+            }}
+            onChange={async (e) => onImageSelected(e.target.files?.[0] ?? null)}
+          />
+
+          <div className="min-h-5 text-xs text-slate-500 dark:text-slate-400">
+            {extracting ? (
+              <span className="font-medium text-sky-700 dark:text-sky-300">
+                Extracting card details...
+              </span>
+            ) : extractMessage ? (
+              <span>{extractMessage}</span>
+            ) : form.image ? (
+              <span>Selected {form.image.name}</span>
+            ) : null}
+          </div>
+        </div>
 
         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
           Brand

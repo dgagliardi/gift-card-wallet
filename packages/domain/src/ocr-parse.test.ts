@@ -11,6 +11,7 @@ describe("parseGiftCardOcrText", () => {
     `;
 
     expect(parseGiftCardOcrText(text)).toEqual({
+      brand: "Digital Costco Shop Card",
       cardNumber: "6349 4456 8830 3401",
       pin: "6422",
       balance: 500,
@@ -25,6 +26,7 @@ describe("parseGiftCardOcrText", () => {
     `;
 
     expect(parseGiftCardOcrText(text)).toEqual({
+      brand: "",
       cardNumber: "6349 4456 8830 3401",
       pin: "6422",
       balance: 1234.56,
@@ -38,9 +40,35 @@ describe("parseGiftCardOcrText", () => {
     `;
 
     expect(parseGiftCardOcrText(text)).toEqual({
+      brand: "Costco",
       cardNumber: "",
       pin: "9876",
       balance: null,
+    });
+  });
+
+  it("extracts a bare barcode value as the card number", () => {
+    expect(parseGiftCardOcrText("6349445688303401")).toEqual({
+      brand: "",
+      cardNumber: "6349 4456 8830 3401",
+      pin: "",
+      balance: null,
+    });
+  });
+
+  it("handles alternate physical card labels", () => {
+    const text = `
+      Starbucks Gift Card
+      Card #: 6098 1234 5678 9012
+      Access Code: 123456
+      Initial Value $25.00
+    `;
+
+    expect(parseGiftCardOcrText(text)).toEqual({
+      brand: "Starbucks Gift Card",
+      cardNumber: "6098 1234 5678 9012",
+      pin: "123456",
+      balance: 25,
     });
   });
 });
