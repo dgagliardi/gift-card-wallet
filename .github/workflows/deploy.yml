@@ -8,7 +8,8 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '[deploy]')
+    # Enable only after the separately approved migration has been accepted.
+    if: contains(github.event.head_commit.message, '[deploy]') && vars.GIFTCARD_NODE24_MIGRATION_ACCEPTED == 'true'
 
     steps:
       - name: Deploy via SSH
@@ -21,7 +22,24 @@ jobs:
           script_stop: true
           script: |
             set -e
+            # App/build runtime is independent of the existing PM2 daemon.
+            APP_NODE=/home/brenni6/.local/node-v24/bin/node
+            export PATH="$(dirname "$APP_NODE"):$PATH"
+            test "$("$APP_NODE" --version)" = v24.20.0
+            test "$(node --version)" = v24.20.0
+            test "$(pnpm --version)" = 9.15.0
             cd ${{ secrets.DEPLOY_PATH }}
+
+            # The known dirty production checkout requires operator reconciliation.
+            # Do not stash, reset, clean, or print operational file contents here.
+            CHECKOUT_STATE=$(git status --porcelain) || {
+              echo "Deployment blocked: checkout state could not be established."
+              exit 1
+            }
+            if test -n "$CHECKOUT_STATE"; then
+              echo "Deployment blocked: checkout needs an approved reconciliation."
+              exit 1
+            fi
 
             echo "==> Pulling latest code..."
             git pull
@@ -30,12 +48,16 @@ jobs:
             CXX=/opt/rh/gcc-toolset-11/root/usr/bin/g++ \
             CC=/opt/rh/gcc-toolset-11/root/usr/bin/gcc \
             npm_config_python=/usr/bin/python3.8 \
-            pnpm install
+            pnpm install --frozen-lockfile
 
             echo "==> Cleaning previous Next build artifacts..."
             rm -rf apps/web/.next
 
             echo "==> Building..."
+            # Build imports lib/db.ts; never let it open the live wallet.
+            BUILD_DATA=$(mktemp -d)
+            DATABASE_PATH="$BUILD_DATA/wallet.db" \
+            UPLOADS_PATH="$BUILD_DATA/uploads" \
             pnpm build
 
             echo "==> Copying static assets..."
@@ -43,6 +65,6 @@ jobs:
             cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
 
             echo "==> Restarting app..."
-            pm2 restart giftcard --update-env
+            pm2 restart giftcard --interpreter "$APP_NODE" --update-env
 
             echo "==> Done."

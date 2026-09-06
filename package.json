@@ -8,5 +8,8 @@
     "lint": "pnpm --filter @gift-card-wallet/web lint",
     "db:push": "pnpm --filter @gift-card-wallet/web db:push"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": "24.20.0"
+  }
 }

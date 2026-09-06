@@ -40,12 +40,16 @@ gift-card-wallet/
     domain/                 # Zod types + computeWalletStats + balance helpers + Vitest
 ```
 
+**Runtime:** exactly Node **24.20.0** (`nvm use`) and pnpm **9.15.0**.
+For the coordinated Webuzo migration, native dependency checks, absolute PM2
+interpreter and data paths, and rollback gates, see [Node 24 migration](docs/node-24-migration.md).
+
 **Commands (from repo root):**
 
 - `pnpm install` — install all workspaces
 - `pnpm dev` — Next dev server (`apps/web`)
 - `pnpm build` — production build of `apps/web`
-- `pnpm test` — run `packages/domain` tests
+- `pnpm test` — run domain and web tests
 - `pnpm db:push` — apply Drizzle schema (creates `apps/web/data/` if needed)
 
 ---
