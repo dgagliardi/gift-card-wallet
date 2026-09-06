@@ -14,15 +14,20 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24.20.0"
           cache: "pnpm"
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
       - name: Test
         run: pnpm test
       - name: Typecheck domain package
         run: pnpm --filter @gift-card-wallet/domain exec tsc
       - name: Lint
         run: pnpm --filter @gift-card-wallet/web lint
-      - name: Build web
-        run: pnpm --filter @gift-card-wallet/web build
+      - name: Build web with disposable data
+        run: |
+          export DATABASE_PATH="$RUNNER_TEMP/giftcard-build/wallet.db"
+          export UPLOADS_PATH="$RUNNER_TEMP/giftcard-build/uploads"
+          pnpm --filter @gift-card-wallet/web build
+      - name: Smoke test standalone runtime
+        run: pnpm --filter @gift-card-wallet/web smoke:standalone
