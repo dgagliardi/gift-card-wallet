@@ -45,9 +45,9 @@ jobs:
             git pull
 
             echo "==> Installing dependencies..."
-            CXX=/opt/rh/gcc-toolset-11/root/usr/bin/g++ \
-            CC=/opt/rh/gcc-toolset-11/root/usr/bin/gcc \
-            npm_config_python=/usr/bin/python3.8 \
+            CXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ \
+            CC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc \
+            npm_config_python=/usr/bin/python3.11 \
             pnpm install --frozen-lockfile
 
             echo "==> Cleaning previous Next build artifacts..."
@@ -55,7 +55,16 @@ jobs:
 
             echo "==> Building..."
             # Build imports lib/db.ts; never let it open the live wallet.
-            BUILD_DATA=$(mktemp -d)
+            BUILD_DATA=$(mktemp -d "${TMPDIR:-/tmp}/giftcard-build.XXXXXX")
+            cleanup_build_data() {
+              case "${BUILD_DATA:-}" in
+                "${TMPDIR:-/tmp}"/giftcard-build.*) rm -rf -- "$BUILD_DATA" ;;
+                "") ;;
+                *) echo "Refusing unsafe build-data cleanup target." >&2; return 1 ;;
+              esac
+            }
+            trap cleanup_build_data EXIT
+            mkdir -p "$BUILD_DATA/uploads"
             DATABASE_PATH="$BUILD_DATA/wallet.db" \
             UPLOADS_PATH="$BUILD_DATA/uploads" \
             pnpm build

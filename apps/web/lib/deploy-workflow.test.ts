@@ -19,7 +19,7 @@ function execute(extra: Record<string, string | undefined> = {}) {
   function stub(name: string, body: string) {
     writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
   }
-  stub("mktemp", 'test "$1" = -d || exit 1\nmkdir "$TEST_SCRATCH/build"\nprintf "%s\\n" "$TEST_SCRATCH/build"');
+  stub("mktemp", 'test "$1" = -d || exit 1\nmkdir "$TEST_SCRATCH/giftcard-build.fixture"\nprintf "%s\\n" "$TEST_SCRATCH/giftcard-build.fixture"');
   stub("node", 'printf "v%s\\n" "${TEST_NODE_VERSION:-24.20.0}"');
   stub("pnpm", `if [ "$1" = --version ]; then printf '%s\\n' "\${TEST_PNPM_VERSION:-9.15.0}"; exit 0; fi
 printf 'pnpm %s | db=%s | uploads=%s\\n' "$*" "$DATABASE_PATH" "$UPLOADS_PATH" >> "$TEST_TRACE"`);
@@ -76,5 +76,6 @@ describe("deployment guards", () => {
     expect(build).toContain(`uploads=${result.scratch}/`);
     expect(build).not.toContain("synthetic-live");
     expect(result.commands).toContain(`pm2 restart giftcard --interpreter ${result.bin}/node --update-env`);
+    expect(result.commands).toContain(`rm -rf -- ${result.scratch}/giftcard-build.fixture`);
   });
 });

@@ -44,11 +44,11 @@ needed by the local Node 24 checks. Resolved versions in `pnpm-lock.yaml`:
 Node-API can offer ABI stability, but that does not make every addon portable;
 see [Node addon guidance](https://nodejs.org/api/addons.html#node-api) and
 [Sharp installation requirements](https://sharp.pixelplumbing.com/install/).
-Local Node 24.20.0 reports module ABI **137**. Production Linux/glibc, compiler,
-prebuilt availability, and real Google OAuth are still migration acceptance gates.
-The existing workflow's GCC 11 / Python 3.8 fallback has not been executed on
-Webuzo by this task; prove the frozen install and native load there in a separately
-authorized isolated candidate before any app restart.
+Local Node 24.20.0 reports module ABI **137**. The target host's glibc, compiler
+and native modules were exercised in the disposable canary below. Real Google
+OAuth remains a migration acceptance gate. The workflow now uses the exact
+Python 3.11 / GCC 12 toolchain proven by that canary rather than an older
+installed fallback.
 
 ## Interpreter and storage contract
 
@@ -132,7 +132,8 @@ env files nor contacts production, Google OAuth, or PM2.
    Node 20 SQLite binding before permitting a cutover.
 3. Rehearse both artifacts on synthetic data using their own Node versions on a
    matching Linux host, including the Node 24 startup path and full app routes.
-   The local macOS result and Ubuntu CI do not prove Webuzo native compatibility.
+   The Node 24 artifact passed this on Webuzo; the preserved Node 20 rollback
+   artifact still needs an equivalent target-host rehearsal.
    Never copy macOS/Ubuntu native artifacts into production as proof of this gate.
 4. Under an approved maintenance window, quiesce all wallet writers (including
    import jobs), then produce a coherent database **and uploads** checkpoint.
@@ -196,3 +197,20 @@ Activation remains blocked on authorized Webuzo candidate validation, verified
 live data/config identity, dirty-checkout reconciliation, a tested Node 20 binary
 rollback and matched data backup, coordinated cutover approval and app acceptance.
 No work in this PR claims those gates are met.
+
+## Target-host validation receipt — 2026-09-06
+
+Exact head `2ac7c332b078553a2d60a2dccc82d785c039fdcc` passed in a
+trap-cleaned checkout on the actual AlmaLinux 8.10 / glibc 2.28 host using Node
+24.20.0, pnpm 9.15.0, Python 3.11.13, and GCC 12.2.1. The frozen install detected
+that the downloaded `better-sqlite3` binary required glibc 2.29 and successfully
+source-built the locked 12.8.0 addon for the host instead. All 48 tests, domain
+typecheck, web lint, and the production Next standalone build passed.
+
+The copied standalone artifact then passed SQLite WAL/write/reopen/backup and
+integrity checks, Sharp PNG encode/decode, synthetic signup and wallet access,
+static/PWA asset loading, authenticated image retrieval, and unauthenticated
+upload denial. All database, uploads, env files, build outputs and retained smoke
+artifacts lived below one exact disposable directory removed by the coordinator's
+trap. No operational env file, card data, production process, PM2 state, or Google
+OAuth flow was accessed.
