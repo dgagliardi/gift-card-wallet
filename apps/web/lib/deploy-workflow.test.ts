@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(new URL("../../../.github/workflows/deploy.yml", import.meta.url), "utf8");
+const sqliteRebuild = readFileSync(new URL("../../../scripts/rebuild-better-sqlite3-el8.sh", import.meta.url), "utf8");
 
 describe("candidate workflow contract", () => {
   it("is manual and bound to one exact current main SHA", () => {
@@ -37,5 +38,8 @@ describe("candidate workflow contract", () => {
     }
     expect(workflow).toContain("integrity_check");
     expect(workflow).toContain(".source-sha");
+    expect(workflow).toContain("bash scripts/rebuild-better-sqlite3-el8.sh");
+    expect(sqliteRebuild).toContain("npm_config_build_from_source=true");
+    expect(sqliteRebuild).toContain("rebuild better-sqlite3");
   });
 });

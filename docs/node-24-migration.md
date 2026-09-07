@@ -48,7 +48,9 @@ Local Node 24.20.0 reports module ABI **137**. The target host's glibc, compiler
 and native modules were exercised in the disposable canary below. Real Google
 OAuth remains a migration acceptance gate. The workflow now uses the exact
 Python 3.11 / GCC 12 toolchain proven by that canary rather than an older
-installed fallback.
+installed fallback. The target candidate also explicitly rebuilds
+`better-sqlite3` from source: setting the compiler variables alone does not stop
+its install script from accepting a packaged binary that needs glibc 2.29.
 
 ## Interpreter and storage contract
 

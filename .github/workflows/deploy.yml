@@ -113,6 +113,7 @@ jobs:
           mkdir -p "$UPLOADS_PATH"
           cd "$WORK"
           pnpm install --frozen-lockfile
+          bash scripts/rebuild-better-sqlite3-el8.sh
           pnpm audit --audit-level moderate
           pnpm test
           pnpm --filter @gift-card-wallet/domain exec tsc
