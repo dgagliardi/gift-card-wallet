@@ -30,6 +30,7 @@ jobs:
         run: |
           export DATABASE_PATH="$RUNNER_TEMP/giftcard-build/wallet.db"
           export UPLOADS_PATH="$RUNNER_TEMP/giftcard-build/uploads"
+          mkdir -p "$(dirname "$DATABASE_PATH")" "$UPLOADS_PATH"
           pnpm --filter @gift-card-wallet/web db:push
           pnpm --filter @gift-card-wallet/web db:wal
           pnpm --filter @gift-card-wallet/web build
