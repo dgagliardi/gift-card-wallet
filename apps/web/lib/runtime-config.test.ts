@@ -10,6 +10,7 @@ describe("Node 24 migration contract", () => {
   it("pins the developer and CI runtime to the tested patch", () => {
     expect(read(".nvmrc").trim()).toBe("24.20.0");
     expect(JSON.parse(read("package.json")).engines.node).toBe("24.20.0");
+    expect(JSON.parse(read("apps/web/package.json")).dependencies["better-sqlite3"]).toBe("13.0.3");
     expect(read(".github/workflows/ci.yml")).toContain('node-version: "24.20.0"');
   });
 

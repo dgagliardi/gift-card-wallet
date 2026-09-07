@@ -17,7 +17,7 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@gift-card-wallet/domain": "workspace:*",
     "better-auth": "1.7.3",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.2",
     "nanoid": "5.1.16",
     "next": "16.3.4",

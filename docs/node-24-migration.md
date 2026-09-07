@@ -34,7 +34,7 @@ needed by the local Node 24 checks. Resolved versions in `pnpm-lock.yaml`:
 
 | Dependency | Where it matters | Migration treatment |
 | --- | --- | --- |
-| `better-sqlite3` 12.8.0 | Every database open; native V8 addon | Install separately under each exact Node runtime. Never reuse Node 20's `.node` file under Node 24 or vice versa. |
+| `better-sqlite3` 13.0.3 | Every database open; Node-API addon | Install separately under each exact Node runtime and host. The EL8 candidate forces a GCC 12 source build and removes the glibc 2.29 prebuild before runtime validation. |
 | `sharp` 0.34.5 and `@img/*` / libvips | Next image processing, included in standalone | Validate the artifact's actual native module on the target OS/architecture/libc. |
 | `@next/swc-*` 15.5.14 | Next compiler | Select Linux packages on Linux; a macOS build is not a deployable VPS artifact. |
 | `@tailwindcss/oxide` 4.2.2, `lightningcss` 1.32.0 | CSS build | Platform-native build dependencies; require a clean install on the build host. |
@@ -49,8 +49,12 @@ and native modules were exercised in the disposable canary below. Real Google
 OAuth remains a migration acceptance gate. The workflow now uses the exact
 Python 3.11 / GCC 12 toolchain proven by that canary rather than an older
 installed fallback. The target candidate also explicitly rebuilds
-`better-sqlite3` from source: setting the compiler variables alone does not stop
-its install script from accepting a packaged binary that needs glibc 2.29.
+`better-sqlite3` from source and removes its packaged binaries: setting compiler
+variables alone does not stop version 13 from preferring a binary that needs
+glibc 2.29. Version 13 replaces the older V8 addon after 12.8.0 aborted in a
+Next standalone worker during Node 24 environment cleanup. Better Auth 1.7.3
+still declares an optional `^12.0.0` peer range; pnpm reports that warning, and
+the full auth/wallet smoke proves the integration rather than suppressing it.
 
 ## Interpreter and storage contract
 
@@ -218,7 +222,7 @@ live data/config identity, dirty-checkout reconciliation, a tested Node 20 binar
 rollback and matched data backup, coordinated cutover approval and app acceptance.
 No work in this PR claims those gates are met.
 
-## Target-host validation receipt — 2026-09-06
+## Precursor target-host validation receipt — 2026-09-06
 
 Exact head `2ac7c332b078553a2d60a2dccc82d785c039fdcc` passed in a
 trap-cleaned checkout on the actual AlmaLinux 8.10 / glibc 2.28 host using Node
@@ -234,3 +238,8 @@ upload denial. All database, uploads, env files, build outputs and retained smok
 artifacts lived below one exact disposable directory removed by the coordinator's
 trap. No operational env file, card data, production process, PM2 state, or Google
 OAuth flow was accessed.
+
+This receipt is precursor evidence only. A later final-stack smoke on 2026-09-07
+proved that 12.8.0 could abort during Node 24 environment cleanup after serving
+the authenticated wallet journey; the current branch therefore uses 13.0.3 and
+requires a fresh exact-head target receipt.

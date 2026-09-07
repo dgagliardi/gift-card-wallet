@@ -40,7 +40,8 @@ describe("candidate workflow contract", () => {
     expect(workflow).toContain("integrity_check");
     expect(workflow).toContain(".source-sha");
     expect(workflow).toContain("bash scripts/rebuild-better-sqlite3-el8.sh");
-    expect(sqliteRebuild).toContain("npm_config_build_from_source=true");
-    expect(sqliteRebuild).toContain("rebuild better-sqlite3");
+    expect(sqliteRebuild).toContain('npm --prefix "$package_root" run build-release');
+    expect(sqliteRebuild).toContain('find "$package_root/prebuilds" -type f -delete');
+    expect(sqliteRebuild).toContain('test -f "$package_root/build/Release/better_sqlite3.node"');
   });
 });

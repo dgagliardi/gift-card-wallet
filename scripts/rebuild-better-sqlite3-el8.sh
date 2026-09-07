@@ -6,11 +6,19 @@ test -x "${CC:-}"
 test -x "${CXX:-}"
 test -x "${npm_config_python:-}"
 
-# The locked Linux prebuild requires glibc 2.29. Force the package install
-# script down its node-gyp path so the EL8/glibc 2.28 candidate receives a
-# binary built with the explicitly selected Python 3.11 and GCC 12 toolchain.
-npm_config_build_from_source=true \
-  pnpm --filter @gift-card-wallet/web rebuild better-sqlite3
+# The packaged Linux prebuild requires glibc 2.29. Version 13 prefers that
+# prebuild even when a local build exists, so force its source-build script and
+# remove the incompatible prebuilds before validating runtime selection.
+package_root=$(node - <<'NODE'
+const path = require("node:path");
+const { createRequire } = require("node:module");
+const requireFromApp = createRequire(`${process.cwd()}/apps/web/package.json`);
+process.stdout.write(path.dirname(requireFromApp.resolve("better-sqlite3/package.json")));
+NODE
+)
+npm --prefix "$package_root" run build-release
+find "$package_root/prebuilds" -type f -delete
+test -f "$package_root/build/Release/better_sqlite3.node"
 
 node - <<'NODE'
 const { createRequire } = require("node:module");
