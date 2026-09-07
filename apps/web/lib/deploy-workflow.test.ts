@@ -19,6 +19,7 @@ describe("candidate workflow contract", () => {
     expect(workflow).toContain("/home/brenni6/.local/node-v24/bin/node");
     expect(workflow).toContain("24.20.0");
     expect(workflow).toContain("9.15.0");
+    expect(workflow.indexOf('cd "$WORK"')).toBeLessThan(workflow.indexOf('test "$(pnpm --version)" = 9.15.0'));
   });
 
   it("publishes only an isolated immutable candidate", () => {

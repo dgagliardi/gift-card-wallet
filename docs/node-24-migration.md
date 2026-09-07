@@ -129,6 +129,8 @@ runner and target host, then atomically publishes only
 `releases/candidate-<sha>`. It cannot read operational env/data, mutate the live
 checkout, invoke PM2, bind a target-host port, or change traffic. Candidate
 preparation and production cutover are separate authorities.
+The target host's global pnpm remains unchanged; Corepack resolves the committed
+`packageManager` pin after the workflow enters the extracted candidate root.
 
 1. Record the accepted candidate commit and frozen lockfile hash. Preserve the
    production dirty checkout and operational artifacts as found; obtain a concrete

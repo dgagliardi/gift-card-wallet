@@ -102,7 +102,6 @@ jobs:
           test "$(sha256sum "$INCOMING" | awk '{print $1}')" = "$EXPECTED_ARCHIVE_SHA"
           test "$($NODE_BIN -p 'process.versions.node')" = 24.20.0
           export PATH="$(dirname "$NODE_BIN"):$PATH"
-          test "$(pnpm --version)" = 9.15.0
           if test -d "$CANDIDATE"; then test "$(cat "$CANDIDATE/.source-sha")" = "$APPROVED_SHA"; exit 0; fi
           mkdir -p "$TARGET/releases" "$WORK"
           tar -xzf "$INCOMING" -C "$WORK"
@@ -112,6 +111,10 @@ jobs:
           export DATABASE_PATH="$WORK/.candidate-validation/wallet.db" UPLOADS_PATH="$WORK/.candidate-validation/uploads"
           mkdir -p "$UPLOADS_PATH"
           cd "$WORK"
+          # Corepack selects the repository's packageManager pin only after cwd
+          # is inside the extracted candidate. The host default is intentionally
+          # left unchanged.
+          test "$(pnpm --version)" = 9.15.0
           pnpm install --frozen-lockfile
           bash scripts/rebuild-better-sqlite3-el8.sh
           pnpm audit --audit-level moderate
