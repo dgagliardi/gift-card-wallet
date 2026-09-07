@@ -43,6 +43,8 @@ gift-card-wallet/
 **Runtime:** exactly Node **24.20.0** (`nvm use`) and pnpm **9.15.0**.
 For the coordinated Webuzo migration, native dependency checks, absolute PM2
 interpreter and data paths, and rollback gates, see [Node 24 migration](docs/node-24-migration.md).
+The Actions workflow prepares only a manually approved, exact-SHA immutable
+candidate; it does not deploy, restart PM2, or access production wallet data.
 
 **Commands (from repo root):**
 

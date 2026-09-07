@@ -119,6 +119,15 @@ env files nor contacts production, Google OAuth, or PM2.
 
 ## Gates for a separately authorized migration
 
+The repository workflow now prepares only an immutable candidate. It is manual,
+requires the entered SHA, checked-out HEAD, current `origin/main`, and repository
+variable `GIFTCARD_NODE24_CANDIDATE_SHA` to match exactly, and pins the SSH host
+identity. It validates tracked source with disposable database/uploads on the
+runner and target host, then atomically publishes only
+`releases/candidate-<sha>`. It cannot read operational env/data, mutate the live
+checkout, invoke PM2, bind a target-host port, or change traffic. Candidate
+preparation and production cutover are separate authorities.
+
 1. Record the accepted candidate commit and frozen lockfile hash. Preserve the
    production dirty checkout and operational artifacts as found; obtain a concrete
    reconciliation plan with ownership before changing them. Do not pull this PR
@@ -180,7 +189,14 @@ this PR, but boot already runs schema convergence, so backup before first boot.
 
 ## Evidence and remaining blockers
 
-Local baseline at `ab1f19b`: exact Node 24.20.0, Darwin arm64, ABI 137; frozen
+The final deployment-safety branch upgrades Next and Better Auth to patched
+versions and pins patched transitives; full and production pnpm audits report no
+known vulnerabilities. Its exact Node 24.20.0 local validation passes 46 tests,
+domain typecheck, web lint, scratch schema/WAL preparation, production build,
+and the full standalone SQLite/Sharp/auth/upload/PWA smoke. The later hosted and
+AlmaLinux exact-final-head checks remain required before candidate preparation.
+
+Earlier baseline at `ab1f19b`: exact Node 24.20.0, Darwin arm64, ABI 137; frozen
 install, 39 existing tests, domain typecheck, web lint, and production build passed.
 The copied standalone smoke passed with its packaged SQLite and Sharp modules.
 A separate local `better-sqlite3` 12.8.0 install under Node 20.20.2 (ABI 115)

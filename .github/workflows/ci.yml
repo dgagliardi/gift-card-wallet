@@ -10,14 +10,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "24.20.0"
           cache: "pnpm"
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        run: pnpm audit --audit-level moderate
       - name: Test
         run: pnpm test
       - name: Typecheck domain package
@@ -28,6 +30,8 @@ jobs:
         run: |
           export DATABASE_PATH="$RUNNER_TEMP/giftcard-build/wallet.db"
           export UPLOADS_PATH="$RUNNER_TEMP/giftcard-build/uploads"
+          pnpm --filter @gift-card-wallet/web db:push
+          pnpm --filter @gift-card-wallet/web db:wal
           pnpm --filter @gift-card-wallet/web build
       - name: Smoke test standalone runtime
         run: pnpm --filter @gift-card-wallet/web smoke:standalone

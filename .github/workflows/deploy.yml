@@ -1,79 +1,138 @@
-name: Deploy to VPS
+name: Prepare Node 24 candidate
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Exact main commit approved for candidate preparation
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: giftcard-node24-candidate
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy
+  prepare-candidate:
     runs-on: ubuntu-latest
-    # Enable only after the separately approved migration has been accepted.
-    if: contains(github.event.head_commit.message, '[deploy]') && vars.GIFTCARD_NODE24_MIGRATION_ACCEPTED == 'true'
-
+    environment: production
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - uses: actions/checkout@v6
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          script_stop: true
-          script: |
-            set -e
-            # App/build runtime is independent of the existing PM2 daemon.
-            APP_NODE=/home/brenni6/.local/node-v24/bin/node
-            export PATH="$(dirname "$APP_NODE"):$PATH"
-            test "$("$APP_NODE" --version)" = v24.20.0
-            test "$(node --version)" = v24.20.0
-            test "$(pnpm --version)" = 9.15.0
-            cd ${{ secrets.DEPLOY_PATH }}
-
-            # The known dirty production checkout requires operator reconciliation.
-            # Do not stash, reset, clean, or print operational file contents here.
-            CHECKOUT_STATE=$(git status --porcelain) || {
-              echo "Deployment blocked: checkout state could not be established."
-              exit 1
-            }
-            if test -n "$CHECKOUT_STATE"; then
-              echo "Deployment blocked: checkout needs an approved reconciliation."
-              exit 1
-            fi
-
-            echo "==> Pulling latest code..."
-            git pull
-
-            echo "==> Installing dependencies..."
-            CXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ \
-            CC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc \
-            npm_config_python=/usr/bin/python3.11 \
-            pnpm install --frozen-lockfile
-
-            echo "==> Cleaning previous Next build artifacts..."
-            rm -rf apps/web/.next
-
-            echo "==> Building..."
-            # Build imports lib/db.ts; never let it open the live wallet.
-            BUILD_DATA=$(mktemp -d "${TMPDIR:-/tmp}/giftcard-build.XXXXXX")
-            cleanup_build_data() {
-              case "${BUILD_DATA:-}" in
-                "${TMPDIR:-/tmp}"/giftcard-build.*) rm -rf -- "$BUILD_DATA" ;;
-                "") ;;
-                *) echo "Refusing unsafe build-data cleanup target." >&2; return 1 ;;
-              esac
-            }
-            trap cleanup_build_data EXIT
-            mkdir -p "$BUILD_DATA/uploads"
-            DATABASE_PATH="$BUILD_DATA/wallet.db" \
-            UPLOADS_PATH="$BUILD_DATA/uploads" \
-            pnpm build
-
-            echo "==> Copying static assets..."
-            cp -r apps/web/public apps/web/.next/standalone/apps/web/public
-            cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
-
-            echo "==> Restarting app..."
-            pm2 restart giftcard --interpreter "$APP_NODE" --update-env
-
-            echo "==> Done."
+          ref: ${{ inputs.approved_sha }}
+          fetch-depth: 0
+      - name: Verify exact main commit and approval pin
+        env:
+          APPROVED_SHA: ${{ inputs.approved_sha }}
+          CANDIDATE_SHA: ${{ vars.GIFTCARD_NODE24_CANDIDATE_SHA }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$APPROVED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          test "$(git rev-parse origin/main)" = "$APPROVED_SHA"
+          test -n "$CANDIDATE_SHA"
+          test "$CANDIDATE_SHA" = "$APPROVED_SHA"
+          case "$APPROVED_SHA" in *[!0-9a-f]*|'') exit 1;; esac
+          test "${#APPROVED_SHA}" -eq 40
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Validate tracked candidate on the runner
+        run: |
+          set -euo pipefail
+          export DATABASE_PATH="$RUNNER_TEMP/giftcard/wallet.db"
+          export UPLOADS_PATH="$RUNNER_TEMP/giftcard/uploads"
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level moderate
+          pnpm test
+          pnpm --filter @gift-card-wallet/domain exec tsc
+          pnpm --filter @gift-card-wallet/web lint
+          pnpm --filter @gift-card-wallet/web db:push
+          pnpm --filter @gift-card-wallet/web db:wal
+          pnpm --filter @gift-card-wallet/web build
+          pnpm --filter @gift-card-wallet/web smoke:standalone
+      - name: Package tracked source
+        id: package
+        run: |
+          git archive --format=tar "$GITHUB_SHA" | gzip -n -9 > giftcard-candidate.tar.gz
+          echo "archive_sha=$(sha256sum giftcard-candidate.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Pin VPS host identity
+        env:
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$KNOWN_HOSTS"
+          install -d -m 700 "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
+          echo "SSH_KNOWN_HOSTS=$RUNNER_TEMP/ssh/known_hosts" >> "$GITHUB_ENV"
+      - name: Upload and prepare isolated candidate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          ARCHIVE_SHA: ${{ steps.package.outputs.archive_sha }}
+        run: |
+          set -euo pipefail
+          test "$DEPLOY_PATH" = /home/brenni6/apps/gift-card-wallet
+          REMOTE_ARCHIVE="$DEPLOY_PATH/.node24-candidate-incoming-$GITHUB_SHA.tar.gz"
+          SSH_OPTIONS=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS")
+          scp -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS" giftcard-candidate.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_ARCHIVE"
+          ssh "${SSH_OPTIONS[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$GITHUB_SHA' '$ARCHIVE_SHA' '$DEPLOY_PATH'" <<'REMOTE'
+          set -euo pipefail
+          APPROVED_SHA="$1"; EXPECTED_ARCHIVE_SHA="$2"; TARGET="$3"
+          NODE_BIN=/home/brenni6/.local/node-v24/bin/node
+          INCOMING="$TARGET/.node24-candidate-incoming-$APPROVED_SHA.tar.gz"
+          WORK="$TARGET/.node24-candidate-work-$APPROVED_SHA-$$"
+          CANDIDATE="$TARGET/releases/candidate-$APPROVED_SHA"
+          cleanup() { rm -rf -- "$WORK"; rm -f -- "$INCOMING"; }
+          trap cleanup EXIT
+          test "$TARGET" = /home/brenni6/apps/gift-card-wallet
+          test -d "$TARGET"; test -x "$NODE_BIN"
+          test "$(sha256sum "$INCOMING" | awk '{print $1}')" = "$EXPECTED_ARCHIVE_SHA"
+          test "$($NODE_BIN -p 'process.versions.node')" = 24.20.0
+          export PATH="$(dirname "$NODE_BIN"):$PATH"
+          test "$(pnpm --version)" = 9.15.0
+          if test -d "$CANDIDATE"; then test "$(cat "$CANDIDATE/.source-sha")" = "$APPROVED_SHA"; exit 0; fi
+          mkdir -p "$TARGET/releases" "$WORK"
+          tar -xzf "$INCOMING" -C "$WORK"
+          printf '%s\n' "$APPROVED_SHA" > "$WORK/.source-sha"
+          if test -r /opt/rh/gcc-toolset-12/enable; then . /opt/rh/gcc-toolset-12/enable; fi
+          export CC=/opt/rh/gcc-toolset-12/root/usr/bin/gcc CXX=/opt/rh/gcc-toolset-12/root/usr/bin/g++ npm_config_python=/usr/bin/python3.11
+          export DATABASE_PATH="$WORK/.candidate-validation/wallet.db" UPLOADS_PATH="$WORK/.candidate-validation/uploads"
+          mkdir -p "$UPLOADS_PATH"
+          cd "$WORK"
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level moderate
+          pnpm test
+          pnpm --filter @gift-card-wallet/domain exec tsc
+          pnpm --filter @gift-card-wallet/web lint
+          pnpm --filter @gift-card-wallet/web db:push
+          pnpm --filter @gift-card-wallet/web db:wal
+          pnpm --filter @gift-card-wallet/web build
+          cp -R apps/web/public apps/web/.next/standalone/apps/web/public
+          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          cp .source-sha apps/web/.next/standalone/apps/web/.source-sha
+          "$NODE_BIN" --check apps/web/.next/standalone/apps/web/server.js
+          "$NODE_BIN" - <<'NODE'
+          const {createRequire}=require('node:module');
+          const requireFromApp=createRequire(process.cwd()+'/apps/web/.next/standalone/apps/web/server.js');
+          const Database=requireFromApp('better-sqlite3');
+          const db=new Database(process.env.DATABASE_PATH);
+          if(db.pragma('integrity_check',{simple:true})!=='ok')process.exit(1);
+          db.close();
+          NODE
+          rm -rf -- "$WORK/.candidate-validation" "$WORK/apps/web/.next/cache"
+          test "$(cat "$WORK/apps/web/.next/standalone/apps/web/.source-sha")" = "$APPROVED_SHA"
+          chmod -R go-w "$WORK"
+          mv "$WORK" "$CANDIDATE"
+          REMOTE
