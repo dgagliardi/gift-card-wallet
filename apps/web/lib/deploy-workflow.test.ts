@@ -22,6 +22,20 @@ describe("candidate workflow contract", () => {
     expect(workflow.indexOf('cd "$WORK"')).toBeLessThan(workflow.indexOf('test "$(pnpm --version)" = 9.15.0'));
   });
 
+  it("builds outside the live checkout so Next roots file tracing at the candidate", () => {
+    // Next 16 walks up for a workspace root. A work directory inside $TARGET
+    // finds the live checkout's lockfile, and the standalone output is then
+    // emitted under an extra path segment named after the work directory --
+    // so the asset copy below silently targets a path that does not exist.
+    expect(workflow).not.toMatch(/WORK="\$TARGET\//);
+    expect(workflow).toMatch(/WORK="\$HOME\//);
+  });
+
+  it("proves the standalone layout before assembling assets into it", () => {
+    expect(workflow).toContain("SROOT=");
+    expect(workflow).toContain('test "$SROOT" = apps/web/.next/standalone/apps/web');
+  });
+
   it("publishes only an isolated immutable candidate", () => {
     expect(workflow).toContain('CANDIDATE="$TARGET/releases/candidate-$APPROVED_SHA"');
     expect(workflow).toContain('DATABASE_PATH="$WORK/.candidate-validation/wallet.db"');
@@ -34,7 +48,7 @@ describe("candidate workflow contract", () => {
   });
 
   it("requires audits, application checks, scratch WAL, and native proof", () => {
-    for (const command of ["pnpm audit", "pnpm test", " exec tsc", " lint", " db:push", " db:wal", " build"]) {
+    for (const command of ["pnpm audit", "pnpm test", " exec tsc", " lint", " db:push", " db:wal", " build", " verify:sw"]) {
       expect(workflow).toContain(command);
     }
     expect(workflow).toContain("integrity_check");

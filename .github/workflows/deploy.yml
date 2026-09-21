@@ -57,6 +57,7 @@ jobs:
           pnpm --filter @gift-card-wallet/web db:push
           pnpm --filter @gift-card-wallet/web db:wal
           pnpm --filter @gift-card-wallet/web build
+          pnpm --filter @gift-card-wallet/web verify:sw
           pnpm --filter @gift-card-wallet/web smoke:standalone
       - name: Package tracked source
         id: package
@@ -93,7 +94,12 @@ jobs:
           APPROVED_SHA="$1"; EXPECTED_ARCHIVE_SHA="$2"; TARGET="$3"
           NODE_BIN=/home/brenni6/.local/node-v24/bin/node
           INCOMING="$TARGET/.node24-candidate-incoming-$APPROVED_SHA.tar.gz"
-          WORK="$TARGET/.node24-candidate-work-$APPROVED_SHA-$$"
+          # Must live OUTSIDE $TARGET. Next resolves its file-tracing root by
+          # walking up for a workspace marker; a work directory inside the live
+          # checkout finds that lockfile instead of the candidate's own, and the
+          # standalone output gains an extra path segment named after this
+          # directory. Keep this path free of any ancestor workspace.
+          WORK="$HOME/.giftcard-candidate-build/work-$APPROVED_SHA-$$"
           CANDIDATE="$TARGET/releases/candidate-$APPROVED_SHA"
           cleanup() { rm -rf -- "$WORK"; rm -f -- "$INCOMING"; }
           trap cleanup EXIT
@@ -104,6 +110,7 @@ jobs:
           export PATH="$(dirname "$NODE_BIN"):$PATH"
           if test -d "$CANDIDATE"; then test "$(cat "$CANDIDATE/.source-sha")" = "$APPROVED_SHA"; exit 0; fi
           mkdir -p "$TARGET/releases" "$WORK"
+          test "${WORK#$TARGET}" = "$WORK"
           tar -xzf "$INCOMING" -C "$WORK"
           printf '%s\n' "$APPROVED_SHA" > "$WORK/.source-sha"
           if test -r /opt/rh/gcc-toolset-12/enable; then . /opt/rh/gcc-toolset-12/enable; fi
@@ -124,9 +131,17 @@ jobs:
           pnpm --filter @gift-card-wallet/web db:push
           pnpm --filter @gift-card-wallet/web db:wal
           pnpm --filter @gift-card-wallet/web build
-          cp -R apps/web/public apps/web/.next/standalone/apps/web/public
-          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
-          cp .source-sha apps/web/.next/standalone/apps/web/.source-sha
+          # The service worker in this artifact is what phones execute. A
+          # NetworkFirst route with no timeout hangs on weak signal instead of
+          # serving its cached copy, and no test of the config can see it.
+          pnpm --filter @gift-card-wallet/web verify:sw
+          SERVER="$(find apps/web/.next/standalone -maxdepth 4 -name server.js | head -1)"
+          test -n "$SERVER"
+          SROOT="$(dirname "$SERVER")"
+          test "$SROOT" = apps/web/.next/standalone/apps/web
+          cp -R apps/web/public "$SROOT/public"
+          cp -R apps/web/.next/static "$SROOT/.next/static"
+          cp .source-sha "$SROOT/.source-sha"
           "$NODE_BIN" --check apps/web/.next/standalone/apps/web/server.js
           "$NODE_BIN" - <<'NODE'
           const {createRequire}=require('node:module');
