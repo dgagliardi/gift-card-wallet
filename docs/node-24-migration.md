@@ -1,8 +1,12 @@
 # Gift Card Wallet: Node 24.20.0 / Webuzo migration
 
-Status: preparation only. This change does not authorize a production action.
+Status: **migrated. Production has run Node 24.20.0 since 2026-09-21.**
+See [Cutover receipt](#cutover-receipt--2026-09-21) for what was executed and verified.
 Target is exactly **24.20.0**, with pnpm **9.15.0**, not a floating major or LTS alias.
-Node 20.20.2 is retained only for a rehearsed rollback.
+Node 20.20.2 remains available at `/usr/bin/node` for rollback.
+
+Sections below that describe gates as pending are preserved as the pre-migration
+record; the receipt states which were met and which were waived.
 
 ## Known facts and scope
 
@@ -16,16 +20,15 @@ production or inspect operational files:
   artifacts. Their contents and the actual storage paths remain uninspected.
 - Existing PM2 daemon and startup service are separate from the app interpreter.
 
-No merge, deployment, PM2 restart, daemon/startup change, secret inspection,
-production reconciliation, or cleanup is part of this PR. Do not add the deploy
-trigger to a commit or merge message. The ordinary deploy workflow is **not the
-first-migration procedure**: it installs in place and replaces `.next`, so it
-cannot create the rollback set described below. It remains disabled until an authorized coordinator records repository variable
-`GIFTCARD_NODE24_MIGRATION_ACCEPTED=true` after migration acceptance. This task
-does not set that variable; it is an operational latch, not proof or approval by
-itself. Its dirty-check gate also blocks the known checkout, or an unreadable
-checkout state, before pull/install/build/restart. Do not bypass it with
-stash/reset/clean, an ignore rule, or a forced checkout.
+This section records the scope of the original preparation PR, which performed
+no production action. The migration itself was executed later; see the receipt.
+
+**The in-place deploy workflow no longer exists.** `f46204b` replaced the
+original "deploy to VPS on `[deploy]` commits" workflow with the candidate
+preparation workflow, so `[deploy]` markers in commit messages now do nothing
+and `GIFTCARD_NODE24_MIGRATION_ACCEPTED` is never read by any workflow. The
+in-place model was never the first-migration procedure anyway: it replaced
+`.next` in the live checkout and so could not produce the rollback set below.
 
 ## Source audit and native dependencies
 
@@ -217,10 +220,10 @@ CompressionStream/DecompressionStream warning. A build without private auth
 configuration also warns about the development fallback secret; no production
 secret was read to suppress it.
 
-Activation remains blocked on authorized Webuzo candidate validation, verified
-live data/config identity, dirty-checkout reconciliation, a tested Node 20 binary
-rollback and matched data backup, coordinated cutover approval and app acceptance.
-No work in this PR claims those gates are met.
+Those blockers were resolved at cutover on 2026-09-21, with one exception:
+dirty-checkout reconciliation was **not** performed. The live checkout was left
+untouched at `ab1f19b` by design, because production no longer runs from it.
+See the receipt.
 
 ## Precursor target-host validation receipt — 2026-09-06
 
@@ -243,3 +246,81 @@ This receipt is precursor evidence only. A later final-stack smoke on 2026-09-07
 proved that 12.8.0 could abort during Node 24 environment cleanup after serving
 the authenticated wallet journey; the current branch therefore uses 13.0.3 and
 requires a fresh exact-head target receipt.
+
+## Cutover receipt — 2026-09-21
+
+Commit `0a1eee8bcbe91e696bad0831b9b04dbb3660eb6e` (v0.3.2) is in production on
+Node 24.20.0. The cutover was executed over SSH under direct operator
+authorization, not through the candidate workflow — see [Why the workflow was
+not used](#why-the-workflow-was-not-used).
+
+**Before:** commit `ab1f19b` (v0.3.1), `/usr/bin/node` 20.20.2 (ABI 115),
+better-sqlite3 12.8.0, Next 15.5.14, running from the live checkout at
+`/home/brenni6/apps/gift-card-wallet/apps/web`.
+
+**After:** commit `0a1eee8` (v0.3.2), `/home/brenni6/.local/node-v24/bin/node`
+24.20.0 (ABI 137), better-sqlite3 13.0.3 source-built for EL8, Next 16.3.4,
+running from the immutable release at
+`/home/brenni6/candidates/candidate-0a1eee8.../apps/web`.
+
+### Gates
+
+| Gate | Status |
+| --- | --- |
+| 1. Record candidate commit and frozen lockfile | Met — exact SHA, `--frozen-lockfile` |
+| 2. Preserve usable old release + Node 20 binary | Met — `/home/brenni6/rollback/giftcard-node20-ab1f19b` (106M) verified loading its own ABI-115 binding and reading all 17 cards. Node 20 stays at `/usr/bin/node` |
+| 3. Rehearse on synthetic data | Met on the target host — full standalone smoke (SQLite WAL/backup/integrity, Sharp, synthetic signup, authenticated wallet, protected image, PWA assets) |
+| 4. Writer-free database + uploads checkpoint | Met — online backup pre-cutover, then a coherent checkpoint with `giftcard` stopped |
+| 5. Build with isolated data; apply config to only `giftcard` | Met — disposable `DATABASE_PATH`/`UPLOADS_PATH`; `pm2 start --only giftcard`; the other 15 apps kept their uptimes |
+| 6. Verify before reopening writes | Met — see below |
+| Dirty-checkout reconciliation | **Waived.** Live checkout left at `ab1f19b`, still dirty, deliberately untouched |
+
+### Gate 6 evidence
+
+- Interpreter identity: `/proc/<pid>/exe` resolves to Node 24.20.0; cwd is the candidate standalone
+- Live wallet opened by the process is `/home/brenni6/apps/gift-card-wallet/data/gift-card-wallet.db`, not a standalone-relative fallback
+- Data unchanged: 17 cards (`sum(initialBalance)` 9000), 71 transactions (`sum(amount)` 8006.46), 1 user, 1 account, `integrity_check` ok
+- No `NODE_MODULE_VERSION` / `ERR_DLOPEN` / ABI errors in logs; 0 restarts
+- Unauthenticated `/api/uploads` still returns 401
+- `pm2 save` run after acceptance, so the release survives reboot
+
+### Rollback
+
+```sh
+pm2 delete giftcard
+pm2 start /home/brenni6/apps/gift-card-wallet/apps/web/ecosystem.config.js --only giftcard
+```
+
+Returns to Node 20 and the original standalone, which was verified before
+cutover. Retained assets: rollback release above; online backup
+`/home/brenni6/backups/giftcard-20260921-170609`; writer-free checkpoint
+`/home/brenni6/backups/giftcard-cutover-20260921-174717`; previous PM2 process
+list `~/.pm2/dump.pm2.pre-giftcard-node24`.
+
+### Why the workflow was not used
+
+Two blockers, both still true for the next candidate run:
+
+1. **`DEPLOY_SSH_KNOWN_HOSTS` is not set.** The workflow hard-fails on
+   `test -n "$KNOWN_HOSTS"`. The value must come from a host key the operator
+   already trusts, not from an `ssh-keyscan` of an unverified connection.
+2. **The workflow built inside the live checkout.** `WORK` was
+   `$TARGET/.node24-candidate-work-...`, so Next 16 walked up, found the live
+   checkout's lockfile, made that the file-tracing root, and emitted
+   `.next/standalone/<work-dir-name>/apps/web/server.js`. The asset copy then
+   targeted a path that did not exist. This reproduced on the first manual
+   build attempt and is fixed in `deploy.yml`: the work directory now lives
+   outside `$TARGET`, the standalone root is asserted before assets are copied,
+   and `verify:sw` runs against the artifact that ships.
+
+Under Next 15 the layout happened to match, so this latent bug only surfaced
+once the Next 16 upgrade reached a candidate build.
+
+### Divergence to be aware of
+
+Production runs from `/home/brenni6/candidates/candidate-<sha>`, while the
+workflow publishes to `$TARGET/releases/candidate-<sha>`. The live checkout at
+`/home/brenni6/apps/gift-card-wallet` is no longer the running application; it
+is retained only as the rollback source and as the location of `data/` and
+`logs/`. A future cutover should point PM2 at the workflow-published
+`releases/` path and drop the one-off `candidates/` directory.
