@@ -17,6 +17,7 @@ import {
   updateCardImageFromForm,
 } from "@/app/actions/wallet";
 import { extractReceiptTextWithGoogleVision } from "@/app/actions/receipt-vision";
+import { downscaleImageFile } from "@/lib/image-downscale";
 
 type Props = {
   initialCards: WalletCard[];
@@ -314,8 +315,8 @@ export function WalletHome({ initialCards, initialStats }: Props) {
     fd.set("cardNumber", form.cardNumber);
     fd.set("pin", form.pin);
     fd.set("balanceUrl", form.balanceUrl);
-    if (form.image) fd.set("image", form.image);
     startTransition(async () => {
+      if (form.image) fd.set("image", await downscaleImageFile(form.image));
       await saveCardFromForm(fd);
       setAddOpen(false);
       setAddExtractMessage("");
@@ -347,7 +348,7 @@ export function WalletHome({ initialCards, initialStats }: Props) {
       });
       if (editImage && detailCard.type === "Digital") {
         const fd = new FormData();
-        fd.set("image", editImage);
+        fd.set("image", await downscaleImageFile(editImage));
         await updateCardImageFromForm(detailCard.id, fd);
       }
       setDetailCard(null);
