@@ -4,6 +4,7 @@ import { parseGiftCardOcrText } from "@gift-card-wallet/domain";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { saveCardFromForm } from "@/app/actions/wallet";
+import { downscaleImageFile } from "@/lib/image-downscale";
 
 type CardType = "Physical" | "Digital";
 
@@ -144,8 +145,8 @@ export function AddCardPage() {
     fd.set("cardNumber", form.cardNumber);
     fd.set("pin", form.pin);
     fd.set("balanceUrl", form.balanceUrl);
-    if (form.image) fd.set("image", form.image);
     startTransition(async () => {
+      if (form.image) fd.set("image", await downscaleImageFile(form.image));
       await saveCardFromForm(fd);
       router.push("/");
       router.refresh();

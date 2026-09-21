@@ -19,6 +19,7 @@ import {
 } from "@/app/actions/wallet";
 import { CategoryToggle } from "@/components/category-toggle";
 import { extractReceiptTextWithGoogleVision } from "@/app/actions/receipt-vision";
+import { downscaleImageFile } from "@/lib/image-downscale";
 
 type GestureCrop = { scale: number; x: number; y: number };
 type SourceDims = { w: number; h: number };
@@ -380,7 +381,12 @@ export function CardDetailPage({
         if (editOriginalImage && card.type === "Digital") {
           setIsSavingBarcodeImage(true);
           const fd = new FormData();
-          fd.set("image", await buildGestureCroppedUpload(editOriginalImage));
+          fd.set(
+            "image",
+            await downscaleImageFile(
+              await buildGestureCroppedUpload(editOriginalImage),
+            ),
+          );
           await updateCardImageFromForm(card.id, fd);
           setEditOriginalImage(null);
         }

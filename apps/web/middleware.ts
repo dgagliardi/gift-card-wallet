@@ -17,6 +17,7 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/setup") ||
+    pathname.startsWith("/offline") ||
     pathname.startsWith("/api/")
   ) {
     return NextResponse.next();

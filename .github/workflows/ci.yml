@@ -34,5 +34,7 @@ jobs:
           pnpm --filter @gift-card-wallet/web db:push
           pnpm --filter @gift-card-wallet/web db:wal
           pnpm --filter @gift-card-wallet/web build
+      - name: Verify service worker resilience
+        run: pnpm --filter @gift-card-wallet/web verify:sw
       - name: Smoke test standalone runtime
         run: pnpm --filter @gift-card-wallet/web smoke:standalone

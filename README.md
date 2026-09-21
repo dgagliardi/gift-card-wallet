@@ -16,6 +16,7 @@ Shared **domain logic** (wallet stats, balance rules) lives in [packages/domain/
 - Physical and digital cards, balances, transactions, archive, spending stats (same behavior as the original Sheets app).
 - **VPS:** [better-auth](https://www.better-auth.com/) with **Google OAuth** (recommended), optional email/password, Drizzle + SQLite, optional PWA. Digital card **photos** are stored on the server and shown in the list and detail views for checkout.
 - **Mobile PWA hardening:** the web app uses a standalone manifest, no-pinch viewport, dynamic viewport height, safe-area padding, and mobile-safe 16px form controls for a more app-like installed experience.
+- **Weak-signal resilience:** every page and RSC route caps how long it waits for the network before serving its cached copy, so the app stays usable in a store with one bar instead of hanging. Card barcodes get a dedicated 256-entry image cache, photos are downscaled in the browser before upload, and a navigation with no cached copy lands on `/offline` rather than a browser error. See [apps/web/lib/pwa-runtime-caching.mjs](apps/web/lib/pwa-runtime-caching.mjs).
 - **Card image autofill:** when adding physical cards, the camera can capture a card photo and best-effort extract brand, card number, PIN, and starting balance. When adding digital cards, barcode images are decoded first and then OCR is used for any visible details. Fields remain editable before save.
 - **Checkout barcode viewer:** digital card images can be panned and zoomed at checkout time, so full-card screenshots remain usable without pre-cropping.
 - Active cards are shown on the home page by default. Archived cards stay hidden behind an Active / Archived switcher when archived cards exist.
@@ -99,7 +100,8 @@ candidate; it does not deploy, restart PM2, or access production wallet data.
 - The file picker is configured to let mobile users choose from Photos, Files, or Camera (device determines chooser UI).
 - OCR extraction runs in-browser (client side) via `tesseract.js`; no OCR text processing is performed on the server.
 - On card detail pages, **Show barcode** opens an interactive viewer. Drag to pan, pinch or use the slider to zoom, and tap Reset to restore the default framing. This does not overwrite the saved image.
-- Installable PWA behavior is configured through the Next.js manifest route and generated service worker assets. Production deploys should keep `/manifest.webmanifest`, `/sw.js`, and Workbox assets reachable from the app root.
+- Installable PWA behavior is configured through the Next.js manifest route and generated service worker assets. Production deploys should keep `/manifest.webmanifest`, `/sw.js`, the generated `/fallback-*.js`, and Workbox assets reachable from the app root.
+- Runtime caching is defined in [apps/web/lib/pwa-runtime-caching.mjs](apps/web/lib/pwa-runtime-caching.mjs), not by next-pwa's defaults. `pnpm verify:sw` asserts against the **built** `public/sw.js` that no `NetworkFirst` route is left without a network timeout; CI runs it after every build.
 
 ---
 
